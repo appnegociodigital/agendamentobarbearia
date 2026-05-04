@@ -665,24 +665,43 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         4. ⏰ Ao agendar, você concorda com esta política.
       </div>
     </div>
-    <div id="payment-pix-section" style="margin-bottom:1rem">
-      <div style="background:var(--off-white);border-radius:10px;padding:1rem;text-align:center;border:2px solid var(--gray)">
-        <div style="font-size:1.5rem;margin-bottom:0.4rem">📱</div>
-        <div style="font-weight:700;color:var(--blue);font-size:0.9rem;margin-bottom:0.3rem">Chave PIX</div>
-        <div id="payment-pix-key-display" style="font-family:monospace;font-size:0.9rem;word-break:break-all;color:var(--gray-dark);background:white;padding:0.5rem;border-radius:6px;margin:0.25rem 0"></div>
-        <button onclick="copyPixKey()" style="background:var(--blue);color:white;border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.8rem;cursor:pointer;margin-top:0.4rem">📋 Copiar Chave</button>
-      </div>
+    <!-- Estado: gerando PIX -->
+    <div id="pix-loading" style="text-align:center;padding:1.5rem 0">
+      <div style="font-size:2rem;margin-bottom:0.5rem">⏳</div>
+      <div style="font-size:0.9rem;color:var(--gray-mid)">Gerando PIX...</div>
     </div>
-    <div id="payment-credit-section" style="display:none;margin-bottom:1rem">
+
+    <!-- Estado: QR Code gerado -->
+    <div id="pix-qrcode-section" style="display:none;margin-bottom:1rem">
       <div style="background:var(--off-white);border-radius:10px;padding:1rem;text-align:center;border:2px solid var(--gray)">
-        <div style="font-size:1.5rem;margin-bottom:0.4rem">💳</div>
-        <div style="font-weight:700;color:var(--blue);font-size:0.9rem">Cartão de Crédito</div>
-        <div style="font-size:0.75rem;color:var(--gray-mid);margin-top:0.3rem">Entre em contato com a barbearia para pagamento por crédito</div>
+        <img id="pix-qr-image" src="" alt="QR Code PIX" style="width:180px;height:180px;margin:0 auto;display:block;border-radius:8px;background:white;padding:4px">
+        <div style="font-weight:700;color:var(--blue);font-size:0.85rem;margin:0.75rem 0 0.3rem">Ou copie o código PIX:</div>
+        <div id="pix-copy-code" style="font-family:monospace;font-size:0.72rem;word-break:break-all;color:var(--gray-dark);background:white;padding:0.5rem;border-radius:6px;margin:0.25rem 0;max-height:60px;overflow:hidden"></div>
+        <button onclick="copyPixCode()" style="background:var(--blue);color:white;border:none;border-radius:6px;padding:0.4rem 1rem;font-size:0.8rem;cursor:pointer;margin-top:0.4rem">📋 Copiar Código</button>
       </div>
+      <div id="pix-status-check" style="margin-top:0.75rem;text-align:center;background:#E3F2FD;border-radius:8px;padding:0.75rem">
+        <div id="pix-status-icon" style="font-size:1.5rem">🔄</div>
+        <div id="pix-status-text" style="font-size:0.8rem;color:var(--blue);font-weight:600;margin-top:0.25rem">Aguardando pagamento...</div>
+        <div style="font-size:0.7rem;color:var(--gray-mid);margin-top:0.2rem">Verificando automaticamente a cada 5 segundos</div>
+      </div>
+      <div id="pix-expiry" style="font-size:0.7rem;color:var(--gray-mid);text-align:center;margin-top:0.5rem"></div>
     </div>
-    <div style="font-size:0.72rem;color:var(--gray-mid);text-align:center;margin-bottom:1rem">Após o pagamento, clique em confirmar para finalizar o agendamento.</div>
-    <button class="btn-primary" id="btn-confirm-after-payment" onclick="confirmAfterPayment()">✅ CONFIRMAR PAGAMENTO E AGENDAR</button>
-    <button class="btn-secondary" onclick="closeModal('modal-payment')" style="width:100%;margin-top:0.5rem">← Cancelar</button>
+
+    <!-- Estado: pago com sucesso -->
+    <div id="pix-paid-section" style="display:none;text-align:center;padding:1rem 0">
+      <div style="font-size:3rem">✅</div>
+      <div style="font-family:var(--font-title);color:#2E7D32;font-size:1.1rem;margin-top:0.5rem">PAGAMENTO CONFIRMADO!</div>
+      <div style="font-size:0.8rem;color:var(--gray-mid);margin-top:0.3rem">Finalizando agendamento...</div>
+    </div>
+
+    <!-- Estado: erro -->
+    <div id="pix-error-section" style="display:none;text-align:center;padding:1rem 0">
+      <div style="font-size:2rem">❌</div>
+      <div id="pix-error-msg" style="font-size:0.85rem;color:var(--red);margin-top:0.5rem"></div>
+      <button onclick="gerarPixPagamento()" style="margin-top:0.75rem;background:var(--blue);color:white;border:none;border-radius:8px;padding:0.6rem 1.5rem;font-size:0.85rem;cursor:pointer">🔄 Tentar novamente</button>
+    </div>
+
+    <button class="btn-secondary" id="btn-cancelar-pix" onclick="closeModal('modal-payment')" style="width:100%;margin-top:0.5rem">← Cancelar</button>
   </div>
 </div>
 
@@ -1730,27 +1749,110 @@ function loadDepositConfig() {
 }
 
 // =====================================================
-//  MODAL DE PAGAMENTO DO SINAL
+//  MODAL DE PAGAMENTO DO SINAL - PIX AUTOMÁTICO PAGBANK
 // =====================================================
+const SUPABASE_FUNCTIONS_URL = SUPABASE_URL_CFG + '/functions/v1';
+let _pixOrderId = null;
+let _pixPollingInterval = null;
+
 function showPaymentModal() {
   const config = clientShopData || {};
   const val = config.deposit_value || 0;
   document.getElementById('payment-value-display').textContent = `R$ ${Number(val).toFixed(2).replace('.', ',')}`;
-  document.getElementById('payment-pix-key-display').textContent = config.pix_key || 'Não configurada';
-  const blockCredit = config.block_credit || false;
-  document.getElementById('payment-credit-section').style.display = blockCredit ? 'none' : 'block';
+  // Resetar estados
+  document.getElementById('pix-loading').style.display = 'block';
+  document.getElementById('pix-qrcode-section').style.display = 'none';
+  document.getElementById('pix-paid-section').style.display = 'none';
+  document.getElementById('pix-error-section').style.display = 'none';
+  document.getElementById('btn-cancelar-pix').style.display = 'block';
+  _pixOrderId = null;
+  clearInterval(_pixPollingInterval);
   openModal('modal-payment');
+  gerarPixPagamento();
 }
 
-function copyPixKey() {
-  const key = document.getElementById('payment-pix-key-display').textContent;
-  navigator.clipboard.writeText(key).then(() => showToast('Chave PIX copiada!', 'success'));
+async function gerarPixPagamento() {
+  document.getElementById('pix-loading').style.display = 'block';
+  document.getElementById('pix-qrcode-section').style.display = 'none';
+  document.getElementById('pix-error-section').style.display = 'none';
+
+  const val = clientShopData?.deposit_value || 0;
+  const referenceId = 'AGENDA-' + Date.now();
+
+  try {
+    const resp = await fetch(SUPABASE_FUNCTIONS_URL + '/verify-pix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+      body: JSON.stringify({ amount: val, reference_id: referenceId })
+    });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      document.getElementById('pix-loading').style.display = 'none';
+      document.getElementById('pix-error-section').style.display = 'block';
+      document.getElementById('pix-error-msg').textContent = data.error || 'Erro ao gerar PIX. Tente novamente.';
+      return;
+    }
+
+    _pixOrderId = data.order_id;
+    document.getElementById('pix-loading').style.display = 'none';
+    document.getElementById('pix-qrcode-section').style.display = 'block';
+
+    // Mostrar QR Code
+    if (data.qr_code_image) {
+      document.getElementById('pix-qr-image').src = data.qr_code_image;
+    } else {
+      document.getElementById('pix-qr-image').style.display = 'none';
+    }
+    document.getElementById('pix-copy-code').textContent = data.qr_code || '';
+
+    // Exibir expiração
+    if (data.expiration) {
+      const exp = new Date(data.expiration);
+      document.getElementById('pix-expiry').textContent = `Expira às ${exp.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`;
+    }
+
+    // Iniciar polling de verificação
+    _pixPollingInterval = setInterval(() => verificarPagamentoPix(), 5000);
+
+  } catch (e) {
+    document.getElementById('pix-loading').style.display = 'none';
+    document.getElementById('pix-error-section').style.display = 'block';
+    document.getElementById('pix-error-msg').textContent = 'Erro de conexão. Verifique sua internet.';
+  }
 }
 
-async function confirmAfterPayment() {
-  closeModal('modal-payment');
-  await doConfirmBooking();
+async function verificarPagamentoPix() {
+  if (!_pixOrderId) return;
+  try {
+    const resp = await fetch(SUPABASE_FUNCTIONS_URL + '/check-pix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+      body: JSON.stringify({ order_id: _pixOrderId })
+    });
+    const data = await resp.json();
+
+    if (data.paid) {
+      clearInterval(_pixPollingInterval);
+      document.getElementById('pix-qrcode-section').style.display = 'none';
+      document.getElementById('pix-paid-section').style.display = 'block';
+      document.getElementById('btn-cancelar-pix').style.display = 'none';
+      setTimeout(() => {
+        closeModal('modal-payment');
+        doConfirmBooking();
+      }, 1500);
+    }
+  } catch (e) { /* silencioso, tenta na próxima */ }
 }
+
+function copyPixCode() {
+  const code = document.getElementById('pix-copy-code').textContent;
+  navigator.clipboard.writeText(code).then(() => showToast('Código PIX copiado!', 'success'));
+}
+
+// manter compatibilidade
+function copyPixKey() { copyPixCode(); }
+async function confirmAfterPayment() { closeModal('modal-payment'); await doConfirmBooking(); }
 
 // Separate the actual booking logic from the payment gate
 async function doConfirmBooking() {
