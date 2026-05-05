@@ -1674,11 +1674,23 @@ function renderClientTimes() {
   const slots = generateSlots(barber, clientFlow.date);
   const booked = getBookingsForDate(clientFlow.date, clientFlow.barberId).map(b => b.booking_time);
   if (slots.length === 0) { grid.innerHTML = '<div style="color:var(--gray-mid);font-size:0.85rem;grid-column:1/-1">Barbeiro não trabalha neste dia</div>'; return; }
-  // Agenda permanece disponível independente do horário atual (mesmo após o horário ter passado)
-  grid.innerHTML = slots.map(time => {
-    const unavailable = booked.includes(time);
-    return `<div class="time-btn ${unavailable ? 'unavailable' : ''} ${clientFlow.time === time ? 'selected' : ''}"
-      onclick="${unavailable ? '' : `selectClientTime('${time}', this)`}">${time}</div>`;
+  // Horários passados ficam visíveis mas bloqueados - cliente não pode agendar no passado
+  const now = new Date();
+  const todayStr = getTodayStr();
+  grid.innerHTML = slots.map(function(time) {
+    const isBooked = booked.includes(time);
+    let isPast = false;
+    if (clientFlow.date === todayStr) {
+      const parts = time.split(':');
+      const slotMin = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      isPast = slotMin <= nowMin;
+    }
+    const unavailable = isBooked || isPast;
+    if (unavailable) {
+      return '<div class="time-btn unavailable">' + time + '</div>';
+    }
+    return '<div class="time-btn' + (clientFlow.time === time ? ' selected' : '') + '" onclick="selectClientTime('' + time + '', this)">' + time + '</div>';
   }).join('');
 }
 
