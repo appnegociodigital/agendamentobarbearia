@@ -1690,7 +1690,7 @@ function renderClientTimes() {
     if (unavailable) {
       return '<div class="time-btn unavailable">' + time + '</div>';
     }
-    return '<div class="time-btn' + (clientFlow.time === time ? ' selected' : '') + '" onclick="selectClientTime('' + time + '', this)">' + time + '</div>';
+    return '<div class="time-btn' + (clientFlow.time === time ? ' selected' : '') + '" onclick="selectClientTime(\'' + time + '\', this)">' + time + '</div>';
   }).join('');
 }
 
