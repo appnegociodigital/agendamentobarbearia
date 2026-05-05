@@ -234,6 +234,19 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 .empty-state { text-align: center; padding: 2rem; color: var(--gray-mid); }
 .slug-tag { background: #E8F5E9; color: #2E7D32; border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; font-family: monospace; }
 </style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1A3A6B">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Barbearia Idelmar">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
 </head>
 <body>
 
