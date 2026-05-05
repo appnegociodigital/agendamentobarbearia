@@ -515,8 +515,15 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         <div style="background:#E8F5E9;border-radius:8px;padding:0.75rem;margin-top:1rem;font-size:0.8rem;color:#2E7D32;text-align:center">
           📱 Uma mensagem de confirmação foi enviada ao seu WhatsApp!
         </div>
+        <div style="background:#FFF8E1;border-radius:8px;padding:0.75rem;margin-top:0.75rem;font-size:0.75rem;color:#5D4037;line-height:1.6;text-align:left">
+          ⏰ <b>Reagendamento gratuito</b> até <b>24h antes</b> do horário marcado.<br>
+          ❌ Após esse prazo, <b>não é possível cancelar ou reagendar</b>.
+        </div>
         <button class="whatsapp-btn" onclick="sendWhatsAppConfirm()" style="margin-top:0.75rem">
           📱 Reenviar mensagem no WhatsApp
+        </button>
+        <button id="btn-client-reschedule" class="btn-secondary" onclick="openClientReschedule()" style="margin-top:0.5rem;width:100%;background:#E3F2FD;color:var(--blue);border-color:var(--blue)">
+          🔄 Reagendar (sem novo sinal)
         </button>
         <button class="btn-secondary" onclick="restartBooking()" style="margin-top:0.5rem;width:100%">Fazer outro agendamento</button>
       </div>
@@ -715,6 +722,31 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
     <div class="modal-actions" style="margin-top:1rem">
       <button class="btn-danger" onclick="cancelBooking()">Cancelar Agendamento</button>
       <button class="btn-secondary" onclick="closeModal('modal-booking-detail')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REAGENDAMENTO PELO CLIENTE -->
+<div class="modal-overlay" id="modal-client-reschedule">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🔄 REAGENDAR</span>
+      <button class="modal-close" onclick="closeModal('modal-client-reschedule')">✕</button>
+    </div>
+    <div style="background:#E3F2FD;border-radius:8px;padding:0.75rem;margin-bottom:1rem;font-size:0.8rem;color:var(--blue)">
+      ✅ Reagendamento <b>gratuito</b> — sem necessidade de novo sinal!<br>
+      ⚠️ Disponível apenas com <b>24h ou mais</b> de antecedência.
+    </div>
+    <div style="margin-bottom:0.75rem">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--gray-dark);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.3rem">Nova Data</div>
+      <div class="date-tabs" id="reschedule-date-tabs" style="margin-bottom:0.75rem"></div>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--gray-dark);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.3rem">Novo Horário</div>
+      <div class="time-select-grid" id="reschedule-time-grid"></div>
+    </div>
+    <div id="reschedule-selected-info" style="display:none;background:#E8F5E9;border-radius:8px;padding:0.6rem;font-size:0.8rem;color:#2E7D32;margin-bottom:0.75rem"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-client-reschedule')">Cancelar</button>
+      <button class="btn-primary" id="btn-do-reschedule" onclick="doClientReschedule()">CONFIRMAR REAGENDAMENTO</button>
     </div>
   </div>
 </div>
@@ -1642,6 +1674,7 @@ function renderClientTimes() {
   const slots = generateSlots(barber, clientFlow.date);
   const booked = getBookingsForDate(clientFlow.date, clientFlow.barberId).map(b => b.booking_time);
   if (slots.length === 0) { grid.innerHTML = '<div style="color:var(--gray-mid);font-size:0.85rem;grid-column:1/-1">Barbeiro não trabalha neste dia</div>'; return; }
+  // Agenda permanece disponível independente do horário atual (mesmo após o horário ter passado)
   grid.innerHTML = slots.map(time => {
     const unavailable = booked.includes(time);
     return `<div class="time-btn ${unavailable ? 'unavailable' : ''} ${clientFlow.time === time ? 'selected' : ''}"
@@ -1703,8 +1736,8 @@ function sendWhatsAppConfirm(bookingData) {
   const sinalInfo = clientShopData && clientShopData.deposit_value > 0
     ? `\n💳 *Sinal pago:* R$${Number(clientShopData.deposit_value).toFixed(2)} (abatido no dia)`
     : '';
-  const politica = `\n\n📄 *Política de Agendamento, Sinal e Cancelamento*\nAo realizar o agendamento, o(a) cliente declara estar ciente e de acordo:\n\n1️⃣ *Sinal Antecipado*\n💸 O valor do sinal será abatido do total no dia do atendimento.\n\n2️⃣ *Cancelamento ou Reagendamento*\n❌ Cancelamento sem custo com *mínimo 24h de antecedência*.\n\n3️⃣ *Não Comparecimento (No-Show)*\n⚠️ O sinal NÃO será devolvido em caso de não comparecimento ou cancelamento fora do prazo.\n\n4️⃣ *Aceite das Condições*\n⏰ Ao agendar, o(a) cliente concorda integralmente com esta política.\n\nAgradecemos a compreensão! 💇‍♀️✨`;
-  const msg = encodeURIComponent(`✅ *Agendamento Confirmado!*\n\n✂️ Barbeiro: ${brName}\n💈 Serviço: ${svName}\n📅 Data: ${formatDate(date)}\n⏰ Horário: ${time}\n💰 Valor: R$${svPrice}${sinalInfo}${politica}\n\nAté logo! 😊`);
+  const reagendamentoInfo = `\n\n🔄 *Reagendamento gratuito* até 24h antes do horário.\n❌ Após esse prazo, não é possível cancelar ou reagendar.`;
+  const msg = encodeURIComponent(`✅ *Agendamento Confirmado!*\n✂️ Barbeiro: ${brName}\n💈 Serviço: ${svName}\n📅 Data: ${formatDate(date)}\n⏰ Horário: ${time}\n💰 Valor: R$${svPrice}${sinalInfo}${reagendamentoInfo}\n\nAté logo! 😊`);
   const wa = waNum.replace(/\D/g, '');
   window.open(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`, '_blank');
 }
@@ -1894,7 +1927,148 @@ async function doConfirmBooking() {
     <div class="confirm-row"><span class="confirm-label">Valor Total</span><span>R$${sv ? Number(sv.price).toFixed(2) : 0}</span></div>${depositInfo}`;
   for (let i = 1; i <= 5; i++) { const el = document.getElementById('client-step-' + i); if (el) el.style.display = 'none'; }
   document.getElementById('client-step-6').style.display = 'block';
+  // Envio automático da mensagem WhatsApp — abre diretamente sem clicar em reenviar
   sendWhatsAppConfirm();
+}
+
+// =====================================================
+//  REAGENDAMENTO PELO CLIENTE (sem novo sinal, até 24h antes)
+// =====================================================
+let _rescheduleBookingId = null;
+let _rescheduleNewDate = '';
+let _rescheduleNewTime = '';
+
+function openClientReschedule() {
+  // Verifica se o agendamento atual ainda pode ser reagendado (>= 24h antes)
+  const bookingDate = clientFlow.date;
+  const bookingTime = clientFlow.time;
+  if (!bookingDate || !bookingTime) { showToast('Dados do agendamento não encontrados.', 'error'); return; }
+
+  const bookingDateTime = new Date(bookingDate + 'T' + bookingTime + ':00');
+  const now = new Date();
+  const diffMs = bookingDateTime - now;
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffHours < 24) {
+    showToast('❌ Reagendamento não permitido. Prazo de 24h encerrado.', 'error');
+    return;
+  }
+
+  _rescheduleNewDate = getDateStr(0);
+  _rescheduleNewTime = '';
+  renderRescheduleDateTabs();
+  renderRescheduleTimesGrid();
+  document.getElementById('reschedule-selected-info').style.display = 'none';
+  openModal('modal-client-reschedule');
+}
+
+function renderRescheduleDateTabs() {
+  const container = document.getElementById('reschedule-date-tabs');
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const d = getDateStr(i);
+    const day = getDayName(d);
+    const num = d.split('-')[2];
+    html += `<div class="date-tab ${d === _rescheduleNewDate ? 'active' : ''}" onclick="selectRescheduleDate('${d}')"><div class="date-tab-day">${day}</div><div class="date-tab-num">${num}</div></div>`;
+  }
+  container.innerHTML = html;
+}
+
+function selectRescheduleDate(date) {
+  _rescheduleNewDate = date;
+  _rescheduleNewTime = '';
+  renderRescheduleDateTabs();
+  renderRescheduleTimesGrid();
+  document.getElementById('reschedule-selected-info').style.display = 'none';
+}
+
+function renderRescheduleTimesGrid() {
+  const grid = document.getElementById('reschedule-time-grid');
+  const barber = getBarber(clientFlow.barberId);
+  if (!barber) { grid.innerHTML = '<div style="color:var(--gray-mid);font-size:0.85rem">Barbeiro não encontrado</div>'; return; }
+  const slots = generateSlots(barber, _rescheduleNewDate);
+  // Ocupados: todos menos o próprio agendamento atual (para não bloquear o slot se for no mesmo dia)
+  const booked = getBookingsForDate(_rescheduleNewDate, clientFlow.barberId)
+    .filter(b => !(b.booking_date === clientFlow.date && b.booking_time === clientFlow.time))
+    .map(b => b.booking_time);
+  if (slots.length === 0) { grid.innerHTML = '<div style="color:var(--gray-mid);font-size:0.85rem;grid-column:1/-1">Barbeiro não trabalha neste dia</div>'; return; }
+  grid.innerHTML = slots.map(time => {
+    const unavailable = booked.includes(time) || time === clientFlow.time && _rescheduleNewDate === clientFlow.date;
+    return `<div class="time-btn ${unavailable ? 'unavailable' : ''} ${_rescheduleNewTime === time ? 'selected' : ''}"
+      onclick="${unavailable ? '' : `selectRescheduleTime('${time}', this)`}">${time}</div>`;
+  }).join('');
+}
+
+function selectRescheduleTime(time, el) {
+  _rescheduleNewTime = time;
+  document.querySelectorAll('#reschedule-time-grid .time-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  const info = document.getElementById('reschedule-selected-info');
+  info.textContent = `✅ Novo horário: ${getDayName(_rescheduleNewDate)}, ${formatDate(_rescheduleNewDate)} às ${time}`;
+  info.style.display = 'block';
+}
+
+async function doClientReschedule() {
+  if (!_rescheduleNewDate || !_rescheduleNewTime) { showToast('Selecione data e horário!', 'error'); return; }
+  // Dupla verificação: >24h antes do horário original
+  const bookingDateTime = new Date(clientFlow.date + 'T' + clientFlow.time + ':00');
+  const now = new Date();
+  if ((bookingDateTime - now) / (1000 * 60 * 60) < 24) {
+    showToast('❌ Prazo de 24h encerrado. Reagendamento não permitido.', 'error');
+    closeModal('modal-client-reschedule');
+    return;
+  }
+  // Buscar o booking atual no banco pelo nome + whatsapp + data + hora + barber
+  showLoading(true);
+  const { data: existingBookings } = await db.from('bookings')
+    .select('id')
+    .eq('shop_id', clientShopData.id)
+    .eq('client_whatsapp', clientFlow.whatsapp.replace(/\D/g,''))
+    .eq('booking_date', clientFlow.date)
+    .eq('booking_time', clientFlow.time)
+    .eq('barber_id', clientFlow.barberId);
+
+  // Também busca sem filtro de telefone formatado
+  let bookingId = existingBookings && existingBookings.length > 0 ? existingBookings[0].id : null;
+  if (!bookingId) {
+    const wa = clientFlow.whatsapp.replace(/\D/g,'');
+    const { data: b2 } = await db.from('bookings').select('id')
+      .eq('shop_id', clientShopData.id).eq('booking_date', clientFlow.date)
+      .eq('booking_time', clientFlow.time).eq('barber_id', clientFlow.barberId);
+    if (b2 && b2.length > 0) bookingId = b2[0].id;
+  }
+
+  if (!bookingId) { showLoading(false); showToast('Agendamento não encontrado no banco.', 'error'); return; }
+
+  const { error } = await db.from('bookings').update({
+    booking_date: _rescheduleNewDate,
+    booking_time: _rescheduleNewTime
+  }).eq('id', bookingId);
+
+  showLoading(false);
+  if (error) { showToast('Erro ao reagendar: ' + error.message, 'error'); return; }
+
+  // Atualiza clientFlow com novos dados
+  const oldDate = clientFlow.date; const oldTime = clientFlow.time;
+  clientFlow.date = _rescheduleNewDate;
+  clientFlow.time = _rescheduleNewTime;
+
+  closeModal('modal-client-reschedule');
+  showToast('✅ Reagendamento confirmado!', 'success');
+
+  // Atualiza a tela de sucesso com novos dados
+  const br = getBarber(clientFlow.barberId); const sv = getService(clientFlow.serviceId);
+  const depositInfo = clientShopData.deposit_value > 0 ? `<div class="confirm-row"><span class="confirm-label">Sinal pago</span><span>R$${Number(clientShopData.deposit_value).toFixed(2)}</span></div>` : '';
+  document.getElementById('success-confirm-box').innerHTML = `
+    <div class="confirm-row"><span class="confirm-label">Barbeiro</span><span>${br ? br.name : '-'}</span></div>
+    <div class="confirm-row"><span class="confirm-label">Serviço</span><span>${sv ? sv.name : '-'}</span></div>
+    <div class="confirm-row"><span class="confirm-label">Data</span><span>${formatDate(clientFlow.date)}</span></div>
+    <div class="confirm-row"><span class="confirm-label">Horário</span><span>${clientFlow.time}</span></div>
+    <div class="confirm-row"><span class="confirm-label">Valor Total</span><span>R$${sv ? Number(sv.price).toFixed(2) : 0}</span></div>${depositInfo}`;
+
+  // Envia nova confirmação via WhatsApp automaticamente
+  sendWhatsAppConfirm();
+  await loadPublicState(clientShopData.id);
 }
 
 // =====================================================
@@ -1902,9 +2076,8 @@ async function doConfirmBooking() {
 // =====================================================
 function buildConfirmMsg(b) {
   const br = getBarber(b.barber_id); const sv = getService(b.service_id);
-  const depositVal = currentShop && currentShop.deposit_value > 0 ? `\n💳 *Sinal pago:* R$${Number(currentShop.deposit_value).toFixed(2)} (abatido no dia)` : '';
-  const politica = `\n\n📄 *Política de Agendamento, Sinal e Cancelamento*\nAo realizar o agendamento, o(a) cliente declara estar ciente e de acordo:\n\n1️⃣ *Sinal Antecipado*\n💸 O valor do sinal será abatido do total no dia do atendimento.\n\n2️⃣ *Cancelamento ou Reagendamento*\n❌ Cancelamento sem custo com *mínimo 24h de antecedência*.\n\n3️⃣ *Não Comparecimento (No-Show)*\n⚠️ O sinal NÃO será devolvido em caso de não comparecimento ou cancelamento fora do prazo.\n\n4️⃣ *Aceite das Condições*\n⏰ Ao agendar, o(a) cliente concorda integralmente com esta política.\n\nAgradecemos a compreensão! 💇‍♀️✨`;
-  return encodeURIComponent(`✅ *Agendamento Confirmado!*\n\n✂️ Barbeiro: ${br ? br.name : ''}\n💈 Serviço: ${sv ? sv.name : ''}\n📅 Data: ${formatDate(b.booking_date)}\n⏰ Horário: ${b.booking_time}\n💰 Valor: R$${sv ? Number(sv.price).toFixed(2) : '0'}${depositVal}${politica}\n\nAté logo! 😊`);
+  // Mensagem manual enviada pela barbearia — formato simples e direto
+  return encodeURIComponent(`✅ *Agendamento Confirmado!*\n✂️ Barbeiro: ${br ? br.name : ''}\n💈 Serviço: ${sv ? sv.name : ''}\n📅 Data: ${formatDate(b.booking_date)}\n⏰ Horário: ${b.booking_time}\n💰 Valor: R$${sv ? Number(sv.price).toFixed(2) : '0'}\nAté logo! 😊`);
 }
 
 function sendIndividualConfirm(bookingId) {
