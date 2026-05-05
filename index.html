@@ -416,11 +416,6 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
       <div class="card">
         <div class="card-header"><span class="card-title">💳 CONFIGURAÇÃO DO SINAL</span></div>
         <div class="form-group">
-          <label>🟡 Access Token Mercado Pago</label>
-          <input type="text" id="deposit-mp-token" placeholder="APP_USR-... ou TEST-..." oninput="saveDepositConfig()" style="font-size:0.75rem">
-          <div style="font-size:0.7rem;color:var(--gray-mid);margin-top:0.25rem">Cada barbearia usa o próprio token do Mercado Pago</div>
-        </div>
-        <div class="form-group">
           <label>Valor do Sinal (R$)</label>
           <select id="deposit-value-select" onchange="saveDepositConfig()">
             <option value="0">Sem sinal (agendamento gratuito)</option>
@@ -961,7 +956,6 @@ CREATE TABLE IF NOT EXISTS barber_blocks (
 -- ALTER TABLE barbershops ADD COLUMN IF NOT EXISTS deposit_value NUMERIC(10,2) DEFAULT 0;
 -- ALTER TABLE barbershops ADD COLUMN IF NOT EXISTS pix_key TEXT DEFAULT '';
 -- ALTER TABLE barbershops ADD COLUMN IF NOT EXISTS block_credit BOOLEAN DEFAULT false;
--- ALTER TABLE barbershops ADD COLUMN IF NOT EXISTS mp_token TEXT DEFAULT '';
 
 -- Colunas extras na tabela barbers (execute se necessario):
 -- ALTER TABLE barbers ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT '';
@@ -1554,7 +1548,7 @@ async function deleteUser(id) {
 // =====================================================
 async function initClientScreen(slug) {
   showLoading(true);
-  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit,mp_token').eq('slug', slug).eq('status', 'active').single();
+  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit').eq('slug', slug).eq('status', 'active').single();
   if (!shop) {
     showLoading(false);
     // Slug inválido ou banco não configurado — mostrar tela de login
@@ -1685,9 +1679,10 @@ function renderClientConfirm() {
 }
 
 async function confirmBooking() {
+  const br = getBarber(clientFlow.barberId); const sv = getService(clientFlow.serviceId);
+  // Se há sinal configurado, exibe modal de pagamento antes de confirmar
   const depositVal = clientShopData && clientShopData.deposit_value > 0 ? Number(clientShopData.deposit_value) : 0;
-  const mpToken = clientShopData && clientShopData.mp_token ? clientShopData.mp_token : '';
-  if (depositVal > 0 && mpToken) {
+  if (depositVal > 0 && clientShopData && clientShopData.pix_key) {
     showPaymentModal();
     return;
   }
@@ -1730,10 +1725,10 @@ function saveDepositConfig() {
   const val = parseFloat(document.getElementById('deposit-value-select').value) || 0;
   const pix = document.getElementById('deposit-pix-key').value.trim();
   const blockCredit = document.getElementById('deposit-block-credit').checked;
-  const mpToken = document.getElementById('deposit-mp-token') ? document.getElementById('deposit-mp-token').value.trim() : '';
-  _depositConfig = { deposit_value: val, pix_key: pix, block_credit: blockCredit, mp_token: mpToken };
+  _depositConfig = { deposit_value: val, pix_key: pix, block_credit: blockCredit };
+  // Persist to Supabase
   if (currentShop) {
-    db.from('barbershops').update({ deposit_value: val, pix_key: pix, block_credit: blockCredit, mp_token: mpToken }).eq('id', currentShop.id)
+    db.from('barbershops').update({ deposit_value: val, pix_key: pix, block_credit: blockCredit }).eq('id', currentShop.id)
       .then(({ error }) => {
         const status = document.getElementById('deposit-config-status');
         if (error) { status.textContent = '❌ Erro ao salvar'; status.style.color = 'red'; }
@@ -1747,16 +1742,14 @@ function loadDepositConfig() {
   const v = document.getElementById('deposit-value-select');
   const p = document.getElementById('deposit-pix-key');
   const c = document.getElementById('deposit-block-credit');
-  const m = document.getElementById('deposit-mp-token');
   if (v) v.value = currentShop.deposit_value || 0;
   if (p) p.value = currentShop.pix_key || '';
   if (c) c.checked = currentShop.block_credit || false;
-  if (m) m.value = currentShop.mp_token || '';
-  _depositConfig = { deposit_value: currentShop.deposit_value || 0, pix_key: currentShop.pix_key || '', block_credit: currentShop.block_credit || false, mp_token: currentShop.mp_token || '' };
+  _depositConfig = { deposit_value: currentShop.deposit_value || 0, pix_key: currentShop.pix_key || '', block_credit: currentShop.block_credit || false };
 }
 
 // =====================================================
-//  MODAL DE PAGAMENTO DO SINAL - PIX AUTOMÁTICO MERCADO PAGO
+//  MODAL DE PAGAMENTO DO SINAL - PIX AUTOMÁTICO PAGBANK
 // =====================================================
 const SUPABASE_FUNCTIONS_URL = SUPABASE_URL_CFG + '/functions/v1';
 let _pixOrderId = null;
@@ -1766,6 +1759,7 @@ function showPaymentModal() {
   const config = clientShopData || {};
   const val = config.deposit_value || 0;
   document.getElementById('payment-value-display').textContent = `R$ ${Number(val).toFixed(2).replace('.', ',')}`;
+  // Resetar estados
   document.getElementById('pix-loading').style.display = 'block';
   document.getElementById('pix-qrcode-section').style.display = 'none';
   document.getElementById('pix-paid-section').style.display = 'none';
@@ -1782,9 +1776,17 @@ async function gerarPixPagamento() {
   document.getElementById('pix-qrcode-section').style.display = 'none';
   document.getElementById('pix-error-section').style.display = 'none';
 
-  const val = clientShopData?.deposit_value || 0;
+  const val = clientShopData ? clientShopData.deposit_value || 0 : 0;
+  const mpToken = clientShopData ? clientShopData.mp_token || '' : '';
   const sv = getService(clientFlow.serviceId);
   const referenceId = 'AGENDA-' + Date.now();
+
+  if (!mpToken) {
+    document.getElementById('pix-loading').style.display = 'none';
+    document.getElementById('pix-error-section').style.display = 'block';
+    document.getElementById('pix-error-msg').textContent = 'Token Mercado Pago nao configurado. Contate a barbearia.';
+    return;
+  }
 
   try {
     const resp = await fetch(SUPABASE_FUNCTIONS_URL + '/mp-payment', {
@@ -1793,10 +1795,10 @@ async function gerarPixPagamento() {
       body: JSON.stringify({
         amount: val,
         reference_id: referenceId,
-        description: `Sinal - ${sv ? sv.name : 'Serviço'} - ${clientFlow.name}`,
+        description: 'Sinal - ' + (sv ? sv.name : 'Servico') + ' - ' + clientFlow.name,
         payer_name: clientFlow.name,
         payer_whatsapp: clientFlow.whatsapp,
-        shop_id: clientShopData.id
+        mp_token: mpToken
       })
     });
     const data = await resp.json();
@@ -1812,7 +1814,6 @@ async function gerarPixPagamento() {
     document.getElementById('pix-loading').style.display = 'none';
     document.getElementById('pix-qrcode-section').style.display = 'block';
 
-    // QR Code como imagem base64 do Mercado Pago
     if (data.qr_code_base64) {
       document.getElementById('pix-qr-image').src = 'data:image/png;base64,' + data.qr_code_base64;
       document.getElementById('pix-qr-image').style.display = 'block';
@@ -1823,34 +1824,35 @@ async function gerarPixPagamento() {
 
     if (data.expiration) {
       const exp = new Date(data.expiration);
-      document.getElementById('pix-expiry').textContent = `Expira às ${exp.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}`;
+      document.getElementById('pix-expiry').textContent = 'Expira as ' + exp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
     }
 
-    // Polling a cada 5 segundos
-    _pixPollingInterval = setInterval(() => verificarPagamentoPix(), 5000);
+    _pixPollingInterval = setInterval(function() { verificarPagamentoPix(mpToken); }, 5000);
 
   } catch (e) {
     document.getElementById('pix-loading').style.display = 'none';
     document.getElementById('pix-error-section').style.display = 'block';
-    document.getElementById('pix-error-msg').textContent = 'Erro de conexão. Verifique sua internet.';
+    document.getElementById('pix-error-msg').textContent = 'Erro de conexao. Verifique sua internet.';
   }
 }
 
-async function verificarPagamentoPix() {
+async function verificarPagamentoPix(mpToken) {
   if (!_pixOrderId) return;
+  var token = mpToken || (clientShopData ? clientShopData.mp_token || '' : '');
   try {
     const resp = await fetch(SUPABASE_FUNCTIONS_URL + '/mp-check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
-      body: JSON.stringify({ payment_id: _pixOrderId, shop_id: clientShopData.id })
+      body: JSON.stringify({ payment_id: _pixOrderId, mp_token: token })
     });
     const data = await resp.json();
+
     if (data.paid) {
       clearInterval(_pixPollingInterval);
       document.getElementById('pix-qrcode-section').style.display = 'none';
       document.getElementById('pix-paid-section').style.display = 'block';
       document.getElementById('btn-cancelar-pix').style.display = 'none';
-      setTimeout(() => { closeModal('modal-payment'); doConfirmBooking(); }, 1500);
+      setTimeout(function() { closeModal('modal-payment'); doConfirmBooking(); }, 1500);
     }
   } catch (e) { /* silencioso */ }
 }
@@ -1860,6 +1862,7 @@ function copyPixCode() {
   navigator.clipboard.writeText(code).then(() => showToast('Código PIX copiado!', 'success'));
 }
 
+// manter compatibilidade
 function copyPixKey() { copyPixCode(); }
 async function confirmAfterPayment() { closeModal('modal-payment'); await doConfirmBooking(); }
 
