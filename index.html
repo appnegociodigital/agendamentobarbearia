@@ -1580,7 +1580,7 @@ async function deleteUser(id) {
 // =====================================================
 async function initClientScreen(slug) {
   showLoading(true);
-  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit').eq('slug', slug).eq('status', 'active').single();
+  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit,mp_token').eq('slug', slug).eq('status', 'active').single();
   if (!shop) {
     showLoading(false);
     // Slug inválido ou banco não configurado — mostrar tela de login
