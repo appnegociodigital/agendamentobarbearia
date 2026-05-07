@@ -234,19 +234,6 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 .empty-state { text-align: center; padding: 2rem; color: var(--gray-mid); }
 .slug-tag { background: #E8F5E9; color: #2E7D32; border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; font-family: monospace; }
 </style>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1A3A6B">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Barbearia Idelmar">
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
-</script>
 </head>
 <body>
 
@@ -459,6 +446,37 @@ if ('serviceWorker' in navigator) {
         </div>
         <div id="deposit-config-status" style="font-size:0.75rem;color:#4CAF50;margin-top:0.25rem"></div>
       </div>
+      <!-- CONFIGURAÇÃO DO TOKEN MERCADO PAGO -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔑 TOKEN MERCADO PAGO</span></div>
+        <div class="form-group">
+          <label>Access Token</label>
+          <input type="text" id="shop-mp-token-input" placeholder="APP_USR-... (cole seu token aqui)" style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Obtenha em <b>developers.mercadopago.com</b> → Suas integrações → Credenciais de produção → Access Token</small>
+        </div>
+        <button class="btn-primary" onclick="saveMpToken()" style="width:100%;margin-top:0.5rem">💾 SALVAR TOKEN</button>
+        <div id="mp-token-status" style="font-size:0.75rem;color:#4CAF50;margin-top:0.4rem;text-align:center"></div>
+      </div>
+
+      <!-- ALTERAR SENHA -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔒 ALTERAR SENHA</span></div>
+        <div class="form-group">
+          <label>Senha Atual *</label>
+          <input type="password" id="shop-pass-current" placeholder="4 dígitos" maxlength="4">
+        </div>
+        <div class="form-group">
+          <label>Nova Senha *</label>
+          <input type="password" id="shop-pass-new" placeholder="4 dígitos" maxlength="4">
+        </div>
+        <div class="form-group">
+          <label>Confirmar Nova Senha *</label>
+          <input type="password" id="shop-pass-confirm" placeholder="4 dígitos" maxlength="4">
+        </div>
+        <button class="btn-primary" onclick="changeShopPassword()" style="width:100%;margin-top:0.5rem">🔐 ALTERAR SENHA</button>
+        <div id="shop-pass-status" style="font-size:0.75rem;margin-top:0.4rem;text-align:center"></div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <span class="card-title">👥 CLIENTES AGENDADOS</span>
@@ -638,6 +656,11 @@ if ('serviceWorker' in navigator) {
     <div class="form-group"><label>Slug (URL) *</label><input type="text" id="user-slug-input" placeholder="barbearia-do-joao" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')"><small style="font-size:0.72rem;color:var(--gray-mid)">Letras minúsculas, números e hífens. Ex: barbearia-do-joao</small></div>
     <div class="form-group"><label>WhatsApp / Telefone *</label><input type="tel" id="user-email-input" placeholder="(85) 99999-9999" oninput="fmtPhone(this)"></div>
     <div class="form-group"><label>Senha *</label><input type="password" id="user-pass-input" placeholder="4 dígitos" maxlength="4"></div>
+    <div class="form-group">
+      <label>🔑 Token Mercado Pago</label>
+      <input type="text" id="user-mp-token-input" placeholder="APP_USR-... (opcional)" style="font-size:0.8rem">
+      <small style="font-size:0.72rem;color:var(--gray-mid)">Obtenha em developers.mercadopago.com → Credenciais de produção → Access Token</small>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('modal-add-user')">Cancelar</button>
       <button class="btn-primary" onclick="saveUser()">SALVAR</button>
@@ -654,8 +677,17 @@ if ('serviceWorker' in navigator) {
     <input type="hidden" id="edit-shop-id">
     <div class="form-group"><label>Nome da Barbearia *</label><input type="text" id="edit-shop-name" placeholder="Ex: Barbearia do Joao"></div>
     <div class="form-group"><label>WhatsApp / Telefone (login) *</label><input type="tel" id="edit-shop-phone" placeholder="(85) 99999-9999" oninput="fmtPhone(this)"></div>
-    <div class="form-group"><label>Nova Senha</label><input type="password" id="edit-shop-pass" placeholder="Deixe em branco para nao alterar" maxlength="4"></div>
+    <div class="form-group">
+      <label>🔒 Nova Senha</label>
+      <input type="password" id="edit-shop-pass" placeholder="Deixe em branco para não alterar" maxlength="4">
+      <small style="font-size:0.72rem;color:var(--gray-mid)">Apenas 4 dígitos. Deixe em branco para manter a senha atual.</small>
+    </div>
     <div class="form-group"><label>Slug (URL)</label><input type="text" id="edit-shop-slug" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')"><small style="font-size:0.72rem;color:var(--gray-mid)">Usado no link do agendamento (?b=slug)</small></div>
+    <div class="form-group">
+      <label>🔑 Token Mercado Pago</label>
+      <input type="text" id="edit-shop-mp-token" placeholder="APP_USR-... (deixe em branco para não alterar)" style="font-size:0.8rem">
+      <small style="font-size:0.72rem;color:var(--gray-mid)">Obtenha em developers.mercadopago.com → Credenciais de produção → Access Token</small>
+    </div>
     <div class="form-group">
       <label>Status</label>
       <select id="edit-shop-status">
@@ -1565,18 +1597,22 @@ async function saveUser() {
   const slug = document.getElementById('user-slug-input').value.trim();
   const email = document.getElementById('user-email-input').value.replace(/[^0-9]/g,'');
   const pass = document.getElementById('user-pass-input').value.trim();
-  if (!name || !slug || !email || !pass) { showToast('Preencha todos os campos!', 'error'); return; }
+  const mpToken = document.getElementById('user-mp-token-input').value.trim();
+  if (!name || !slug || !email || !pass) { showToast('Preencha todos os campos obrigatórios!', 'error'); return; }
   showLoading(true);
-  const { error } = await db.from('barbershops').insert({ name, slug, email, password_hash: pass, role: 'user', status: 'active' });
+  const newShop = { name, slug, email, password_hash: pass, role: 'user', status: 'active' };
+  if (mpToken) newShop.mp_token = mpToken;
+  const { error } = await db.from('barbershops').insert(newShop);
   showLoading(false);
-  if (error) { showToast(error.message.includes('unique') ? 'E-mail ou slug já em uso!' : 'Erro ao salvar!', 'error'); return; }
+  if (error) { showToast(error.message.includes('unique') ? 'Telefone ou slug já em uso!' : 'Erro ao salvar!', 'error'); return; }
   closeModal('modal-add-user');
   document.getElementById('user-name-input').value = '';
   document.getElementById('user-slug-input').value = '';
   document.getElementById('user-email-input').value = '';
   document.getElementById('user-pass-input').value = '';
+  document.getElementById('user-mp-token-input').value = '';
   await renderAdminUsers();
-  showToast('Barbearia criada!', 'success');
+  showToast('Barbearia criada com sucesso!', 'success');
 }
 
 async function toggleUserStatus(id, currentStatus) {
@@ -1810,6 +1846,57 @@ function loadDepositConfig() {
   if (p) p.value = currentShop.pix_key || '';
   if (c) c.checked = currentShop.block_credit || false;
   _depositConfig = { deposit_value: currentShop.deposit_value || 0, pix_key: currentShop.pix_key || '', block_credit: currentShop.block_credit || false };
+  // Exibir token MP mascarado se já existir
+  const mpInput = document.getElementById('shop-mp-token-input');
+  if (mpInput) mpInput.placeholder = currentShop.mp_token ? '🔑 Token já configurado (cole novo para substituir)' : 'APP_USR-... (cole seu token aqui)';
+}
+
+// =====================================================
+//  SALVAR TOKEN MERCADO PAGO (painel da barbearia)
+// =====================================================
+async function saveMpToken() {
+  if (!currentShop) return;
+  const token = document.getElementById('shop-mp-token-input').value.trim();
+  const status = document.getElementById('mp-token-status');
+  if (!token) { status.textContent = '❌ Cole o token antes de salvar.'; status.style.color = 'red'; return; }
+  showLoading(true);
+  const { error } = await db.from('barbershops').update({ mp_token: token }).eq('id', currentShop.id);
+  showLoading(false);
+  if (error) {
+    status.textContent = '❌ Erro ao salvar token.'; status.style.color = 'red';
+  } else {
+    currentShop.mp_token = token;
+    status.textContent = '✅ Token salvo com sucesso!'; status.style.color = '#4CAF50';
+    setTimeout(() => status.textContent = '', 3000);
+  }
+}
+
+// =====================================================
+//  ALTERAR SENHA (painel da barbearia)
+// =====================================================
+async function changeShopPassword() {
+  if (!currentShop) return;
+  const current = document.getElementById('shop-pass-current').value.trim();
+  const newPass = document.getElementById('shop-pass-new').value.trim();
+  const confirm = document.getElementById('shop-pass-confirm').value.trim();
+  const status = document.getElementById('shop-pass-status');
+  if (!current || !newPass || !confirm) { status.textContent = '❌ Preencha todos os campos.'; status.style.color = 'red'; return; }
+  if (newPass !== confirm) { status.textContent = '❌ Nova senha e confirmação não coincidem.'; status.style.color = 'red'; return; }
+  if (newPass.length < 4) { status.textContent = '❌ A senha deve ter 4 dígitos.'; status.style.color = 'red'; return; }
+  const { data: check } = await db.from('barbershops').select('id').eq('id', currentShop.id).eq('password_hash', current).single();
+  if (!check) { status.textContent = '❌ Senha atual incorreta.'; status.style.color = 'red'; return; }
+  showLoading(true);
+  const { error } = await db.from('barbershops').update({ password_hash: newPass }).eq('id', currentShop.id);
+  showLoading(false);
+  if (error) {
+    status.textContent = '❌ Erro ao alterar senha.'; status.style.color = 'red';
+  } else {
+    document.getElementById('shop-pass-current').value = '';
+    document.getElementById('shop-pass-new').value = '';
+    document.getElementById('shop-pass-confirm').value = '';
+    status.textContent = '✅ Senha alterada com sucesso!'; status.style.color = '#4CAF50';
+    setTimeout(() => status.textContent = '', 3000);
+  }
 }
 
 // =====================================================
@@ -2227,6 +2314,7 @@ function editUser(id) {
   document.getElementById('edit-shop-pass').value = '';
   document.getElementById('edit-shop-slug').value = u.slug;
   document.getElementById('edit-shop-status').value = u.status || 'active';
+  document.getElementById('edit-shop-mp-token').value = '';
   openModal('modal-edit-shop');
 }
 
@@ -2237,16 +2325,18 @@ async function saveEditShop() {
   const pass = document.getElementById('edit-shop-pass').value.trim();
   const slug = document.getElementById('edit-shop-slug').value.trim();
   const status = document.getElementById('edit-shop-status').value;
+  const mpToken = document.getElementById('edit-shop-mp-token').value.trim();
   if (!name || !phone || !slug) { showToast('Preencha nome, telefone e slug!','error'); return; }
   showLoading(true);
   const updates = { name, email: phone, slug, status };
   if (pass) updates.password_hash = pass;
+  if (mpToken) updates.mp_token = mpToken;
   const { error } = await db.from('barbershops').update(updates).eq('id', id);
   showLoading(false);
   if (error) { showToast('Erro: ' + error.message,'error'); return; }
   closeModal('modal-edit-shop');
   await renderAdminUsers();
-  showToast('Barbearia atualizada!','success');
+  showToast('Barbearia atualizada com sucesso!','success');
 }
 
 </script>
