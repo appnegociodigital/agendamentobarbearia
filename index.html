@@ -14,59 +14,40 @@
 <meta name="apple-mobile-web-app-title" content="Barbearia">
 <meta name="theme-color" content="#0a1628">
 
-<!-- PWA: ativado APENAS na rota da barbearia (sem ?b=) -->
+<!-- =====================================================
+     PWA — manifest.json + sw.js (arquivos reais na mesma pasta)
+     Para instalar como app no Android/Chrome:
+       coloque index.html, manifest.json e sw.js na MESMA pasta do servidor.
+     O Chrome só exibe o prompt "Instalar app" quando o SW vem de um arquivo
+     real servido pela mesma origem — blobs não satisfazem esse critério.
+===================================================== -->
+<link rel="manifest" href="manifest.json">
 <script>
 (function() {
-  var params = new URLSearchParams(window.location.search);
-  var isClientPage = params.has('b') && params.get('b').length > 1;
-  if (isClientPage) return; // cliente = página normal, sem PWA
-
-  // Manifest via Blob (sem arquivo externo)
-  var manifest = {
-    name: "Barbearia — Painel",
-    short_name: "Barbearia",
-    description: "Painel de gerenciamento da barbearia",
-    start_url: window.location.pathname,
-    scope: window.location.pathname,
-    display: "standalone",
-    orientation: "portrait",
-    background_color: "#0a1628",
-    theme_color: "#0a1628",
-    icons: [
-      {
-        src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%230a1628'/%3E%3Ctext x='96' y='128' font-size='110' text-anchor='middle' font-family='Arial'%3E%E2%9C%82%EF%B8%8F%3C/text%3E%3C/svg%3E",
-        sizes: "192x192", type: "image/svg+xml", purpose: "any maskable"
-      },
-      {
-        src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%230a1628'/%3E%3Ctext x='256' y='340' font-size='290' text-anchor='middle' font-family='Arial'%3E%E2%9C%82%EF%B8%8F%3C/text%3E%3C/svg%3E",
-        sizes: "512x512", type: "image/svg+xml", purpose: "any maskable"
-      }
-    ]
-  };
-  var blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-  var link = document.createElement('link');
-  link.rel = 'manifest';
-  link.href = URL.createObjectURL(blob);
-  document.currentScript.parentNode.insertBefore(link, document.currentScript);
-
-  // Service Worker COMPLETAMENTE PASSIVO — não intercepta nenhuma requisição
-  // Existe apenas para satisfazer o requisito de instalação do PWA
-  var swCode = [
-    "self.addEventListener('install', function(e){ self.skipWaiting(); });",
-    "self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });",
-    "// Sem listener de fetch — todas as requisicoes passam normais pela rede"
-  ].join('\n');
-
+  // ── Registra o Service Worker real ────────────────────────────────
+  // sw.js fica na mesma pasta do HTML e cuida também do keep-alive do Supabase.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      var swBlob = new Blob([swCode], {type: 'application/javascript'});
-      navigator.serviceWorker.register(URL.createObjectURL(swBlob), {
-        scope: window.location.pathname
-      }).catch(function(){});
+      navigator.serviceWorker.register('sw.js')
+        .then(function(reg) {
+          console.log('[PWA] Service Worker registrado:', reg.scope);
+
+          // Tenta ativar Periodic Background Sync (Chrome Android, experimental)
+          if ('periodicSync' in reg) {
+            reg.periodicSync.register('supabase-keepalive', {
+              minInterval: 5 * 24 * 60 * 60 * 1000 // 5 dias
+            }).catch(function() {
+              // Permissão negada ou não suportado — o SW cuida disso no activate
+            });
+          }
+        })
+        .catch(function(err) {
+          console.warn('[PWA] Falha ao registrar SW:', err);
+        });
     });
   }
 
-  // Prompt de instalação nativo
+  // ── Prompt de instalação nativo ────────────────────────────────────
   window._pwaPrompt = null;
   window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
@@ -79,6 +60,48 @@
     var btn = document.getElementById('btn-instalar-app');
     if (btn) btn.style.display = 'none';
   });
+
+  // ── Keep-alive manual via página (fallback para usuários ativos) ───
+  // Se o SW não estiver disponível (ex: HTTP local), a própria página
+  // verifica o IndexedDB e pinga o Supabase quando necessário.
+  // Isso é apenas um fallback; o sw.js é o mecanismo principal.
+  window.addEventListener('DOMContentLoaded', function() {
+    _supabaseKeepaliveFromPage();
+  });
+
+  function _supabaseKeepaliveFromPage() {
+    if (!('indexedDB' in window)) return;
+    var PING_INTERVAL = 5 * 24 * 60 * 60 * 1000;
+    var req = indexedDB.open('barbearia-sw', 1);
+    req.onupgradeneeded = function(e) { e.target.result.createObjectStore('meta'); };
+    req.onsuccess = function(e) {
+      var db = e.target.result;
+      var tx = db.transaction('meta', 'readonly');
+      var get = tx.objectStore('meta').get('lastPing');
+      get.onsuccess = function() {
+        var last = get.result || 0;
+        if (Date.now() - last >= PING_INTERVAL) {
+          // Só pinga se o SW não estiver ativo (para não duplicar)
+          if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+            _doPingSupabase(db);
+          }
+        }
+      };
+    };
+  }
+
+  function _doPingSupabase(db) {
+    var url = 'https://ymrgjbveanbkcqifytal.supabase.co/rest/v1/barbershops?select=id&limit=1';
+    var key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InltcmdqYnZlYW5ia2NxaWZ5dGFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDczNTYsImV4cCI6MjA5MzQ4MzM1Nn0.UJNPMP_Iv85856U0SeZr76LlzlOcCSZ_0AUuGtztgj8';
+    fetch(url, { headers: { 'apikey': key, 'Authorization': 'Bearer ' + key } })
+      .then(function(r) {
+        if (r.ok) {
+          var tx2 = db.transaction('meta', 'readwrite');
+          tx2.objectStore('meta').put(Date.now(), 'lastPing');
+          console.log('[Keepalive] Ping Supabase OK (fallback de página)');
+        }
+      }).catch(function() {});
+  }
 })();
 </script>
 <!-- =====================================================
