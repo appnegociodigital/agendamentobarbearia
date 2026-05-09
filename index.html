@@ -313,6 +313,7 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 /* TOAST */
 .toast { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); background: var(--blue); color: var(--white); padding: 0.75rem 1.5rem; border-radius: 30px; font-size: 0.85rem; font-weight: 600; z-index: 9999; display: none; white-space: nowrap; }
 .toast.success { background: #4CAF50; }
+@keyframes pulse-wa { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(37,211,102,0.4)} 50%{transform:scale(1.04);box-shadow:0 0 0 10px rgba(37,211,102,0)} }
 .toast.error { background: var(--red); }
 @keyframes fadeInOut { 0%{opacity:0;top:0.5rem} 15%{opacity:1;top:1rem} 80%{opacity:1;top:1rem} 100%{opacity:0;top:0.5rem} }
 
@@ -1622,7 +1623,7 @@ function sendReminder(bookingId) {
   const br = getBarber(b.barber_id); const sv = getService(b.service_id);
   const msg = encodeURIComponent(`🔔 *Lembrete de Agendamento!*\n\n✂️ Barbeiro: ${br ? br.name : ''}\n💈 Serviço: ${sv ? sv.name : ''}\n📅 Data: ${formatDate(b.booking_date)}\n⏰ Horário: ${b.booking_time}\n\nTe esperamos! 😊`);
   const wa = b.client_whatsapp.replace(/\D/g, '');
-  window.open(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`, '_blank');
+  openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
 }
 
 // =====================================================
@@ -1659,7 +1660,7 @@ function copyLink() {
 function shareWhatsApp() {
   const link = document.getElementById('booking-link').textContent;
   const msg = encodeURIComponent(`✂️ *Olá! Agende seu horário na ${currentShop?.name || 'Barbearia'}!*\n\n👉 ${link}\n\n📅 Escolha seu barbeiro e horário!`);
-  window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+  openWhatsAppLink(`https://api.whatsapp.com/send?text=${msg}`);
 }
 
 function voltarAoPainel() {
@@ -1751,27 +1752,38 @@ async function initClientScreen(slug) {
   renderClientDateTabs();
 }
 
-function clientStep(step) {
-  for (let i = 1; i <= 6; i++) { const el = document.getElementById('client-step-' + i); if (el) el.style.display = i === step ? 'block' : 'none'; }
-  if (step === 2) renderClientBarbers();
-  if (step === 3) renderClientServices();
-  if (step === 4) { renderClientDateTabs(); renderClientTimes(); }
-  if (step === 5) renderClientConfirm();
-}
-
-// Validation wrapper
-const _origClientStep = clientStep;
-window.clientStep = function(step) {
+// Única função de navegação entre steps — com validação embutida
+// Definida no window para garantir acesso pelo onclick inline em todos os browsers mobile
+window.clientStep = function clientStep(step) {
+  // Validações antes de avançar
   if (step === 2) {
-    const name = document.getElementById('client-name').value.trim();
-    const wa = document.getElementById('client-whatsapp').value.trim();
-    if (!name || !wa) { showToast('Preencha nome e WhatsApp!', 'error'); return; }
-    clientFlow.name = name; clientFlow.whatsapp = wa;
+    var name = document.getElementById('client-name').value.trim();
+    var wa   = document.getElementById('client-whatsapp').value.trim();
+    if (!name) { showToast('Informe seu nome!', 'error'); return; }
+    if (!wa || wa.replace(/\D/g,'').length < 10) { showToast('Informe um WhatsApp válido!', 'error'); return; }
+    clientFlow.name = name;
+    clientFlow.whatsapp = wa;
   }
   if (step === 3 && !clientFlow.barberId) { showToast('Selecione um barbeiro!', 'error'); return; }
   if (step === 4 && !clientFlow.serviceId) { showToast('Selecione um serviço!', 'error'); return; }
   if (step === 5 && !clientFlow.time) { showToast('Selecione um horário!', 'error'); return; }
-  _origClientStep(step);
+
+  // Oculta todos os steps e exibe o correto
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById('client-step-' + i);
+    if (el) el.style.display = (i === step) ? 'block' : 'none';
+  }
+
+  // Scroll para o topo do conteúdo ao trocar de step (importante no mobile)
+  var body = document.querySelector('.client-body');
+  if (body) body.scrollTop = 0;
+  window.scrollTo(0, 0);
+
+  // Renderiza conteúdo do step
+  if (step === 2) renderClientBarbers();
+  if (step === 3) renderClientServices();
+  if (step === 4) { renderClientDateTabs(); renderClientTimes(); }
+  if (step === 5) renderClientConfirm();
 };
 
 function renderClientBarbers() {
@@ -1886,31 +1898,44 @@ async function confirmBooking() {
   await doConfirmBooking();
 }
 
-function sendWhatsAppConfirm(bookingData) {
-  // bookingData optional: if provided uses those values, otherwise uses clientFlow
-  let brName, svName, svPrice, date, time, waNum, clientName;
+function buildWhatsAppUrl(bookingData) {
+  let brName, svName, svPrice, date, time, waNum;
   if (bookingData) {
     brName = bookingData.brName; svName = bookingData.svName; svPrice = bookingData.svPrice;
-    date = bookingData.date; time = bookingData.time; waNum = bookingData.whatsapp; clientName = bookingData.clientName;
+    date = bookingData.date; time = bookingData.time; waNum = bookingData.whatsapp;
   } else {
     const br = getBarber(clientFlow.barberId); const sv = getService(clientFlow.serviceId);
     brName = br ? br.name : ''; svName = sv ? sv.name : ''; svPrice = sv ? Number(sv.price).toFixed(2) : '0';
-    date = clientFlow.date; time = clientFlow.time; waNum = clientFlow.whatsapp; clientName = clientFlow.name;
+    date = clientFlow.date; time = clientFlow.time; waNum = clientFlow.whatsapp;
   }
-
-  // Valida o número antes de abrir
   const wa = (waNum || '').replace(/\D/g, '');
-  if (!wa || wa.length < 10) {
-    showToast('WhatsApp do cliente inválido. Verifique o número.', 'error');
-    return;
-  }
-
+  if (!wa || wa.length < 10) return null;
   const sinalInfo = clientShopData && clientShopData.deposit_value > 0
-    ? `\n💳 *Sinal pago:* R$${Number(clientShopData.deposit_value).toFixed(2)} (abatido no dia)`
+    ? `\n\u{1F4B3} *Sinal pago:* R$${Number(clientShopData.deposit_value).toFixed(2)} (abatido no dia)`
     : '';
-  const reagendamentoInfo = `\n\n🔄 *Reagendamento gratuito* até 24h antes do horário.\n❌ Após esse prazo, não é possível cancelar ou reagendar.`;
-  const msg = encodeURIComponent(`✅ *Agendamento Confirmado!*\n✂️ Barbeiro: ${brName}\n💈 Serviço: ${svName}\n📅 Data: ${formatDate(date)}\n⏰ Horário: ${time}\n💰 Valor: R$${svPrice}${sinalInfo}${reagendamentoInfo}\n\nAté logo! 😊`);
-  window.open(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`, '_blank');
+  const reagendamentoInfo = `\n\n\u{1F504} *Reagendamento gratuito* at\u00e9 24h antes do hor\u00e1rio.\n\u274C Ap\u00f3s esse prazo, n\u00e3o \u00e9 poss\u00edvel cancelar ou reagendar.`;
+  const msg = encodeURIComponent(`\u2705 *Agendamento Confirmado!*\n\u2702\uFE0F Barbeiro: ${brName}\n\u{1F488} Servi\u00e7o: ${svName}\n\u{1F4C5} Data: ${formatDate(date)}\n\u23F0 Hor\u00e1rio: ${time}\n\u{1F4B0} Valor: R$${svPrice}${sinalInfo}${reagendamentoInfo}\n\nAt\u00e9 logo! \u{1F60A}`);
+  // Mobile usa deep link do app; desktop usa web
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) return `whatsapp://send?phone=55${wa}&text=${msg}`;
+  return `https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`;
+}
+
+function openWhatsAppLink(url) {
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { try { document.body.removeChild(a); } catch(e){} }, 300);
+}
+
+function sendWhatsAppConfirm(bookingData) {
+  const url = buildWhatsAppUrl(bookingData);
+  if (!url) { showToast('WhatsApp do cliente inv\u00e1lido. Verifique o n\u00famero.', 'error'); return; }
+  openWhatsAppLink(url);
 }
 
 function restartBooking() {
@@ -2190,10 +2215,18 @@ async function doConfirmBooking() {
   // Exibe toast de confirmação na tela
   showToast('✅ Agendamento confirmado com sucesso!', 'success');
 
-  // Envio automático via WhatsApp com pequeno delay para não bloquear o browser
-  setTimeout(function() {
-    sendWhatsAppConfirm();
-  }, 800);
+  // Em desktop abre WhatsApp automaticamente; em mobile exibe botão para o cliente clicar
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isMobile) {
+    setTimeout(function() { sendWhatsAppConfirm(); }, 400);
+  } else {
+    // Mobile: destaca o botão de WhatsApp para o cliente clicar (popup automático é bloqueado)
+    const waBtn = document.querySelector('#client-step-6 .whatsapp-btn');
+    if (waBtn) {
+      waBtn.style.animation = 'pulse-wa 1s ease-in-out 3';
+      waBtn.textContent = '📱 TOQUE AQUI para receber sua confirmação no WhatsApp';
+    }
+  }
 }
 
 // =====================================================
@@ -2331,8 +2364,17 @@ async function doClientReschedule() {
     <div class="confirm-row"><span class="confirm-label">Horário</span><span>${clientFlow.time}</span></div>
     <div class="confirm-row"><span class="confirm-label">Valor Total</span><span>R$${sv ? Number(sv.price).toFixed(2) : 0}</span></div>${depositInfo}`;
 
-  // Envia nova confirmação via WhatsApp com delay (evita bloqueio do browser)
-  setTimeout(function() { sendWhatsAppConfirm(); }, 800);
+  // Em desktop abre WhatsApp automaticamente; em mobile exibe botão
+  const isMobileR = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isMobileR) {
+    setTimeout(function() { sendWhatsAppConfirm(); }, 400);
+  } else {
+    const waBtn = document.querySelector('#client-step-6 .whatsapp-btn');
+    if (waBtn) {
+      waBtn.style.animation = 'pulse-wa 1s ease-in-out 3';
+      waBtn.textContent = '📱 TOQUE AQUI para receber sua confirmação no WhatsApp';
+    }
+  }
   await loadPublicState(clientShopData.id);
 }
 
@@ -2349,7 +2391,7 @@ function sendIndividualConfirm(bookingId) {
   const b = state.bookings.find(bk => bk.id === bookingId); if (!b) return;
   const msg = buildConfirmMsg(b);
   const wa = b.client_whatsapp.replace(/\D/g, '');
-  window.open(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`, '_blank');
+  openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
 }
 
 function sendBulkWhatsApp(day) {
@@ -2363,7 +2405,7 @@ function sendBulkWhatsApp(day) {
     setTimeout(() => {
       const msg = buildConfirmMsg(b);
       const wa = b.client_whatsapp.replace(/\D/g, '');
-      window.open(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`, '_blank');
+      openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
     }, delay);
     delay += 800;
   });
@@ -2504,6 +2546,72 @@ async function instalarApp() {
   }
 }
 
+
+// =====================================================
+//  EXPÕE FUNÇÕES NO WINDOW — COMPATIBILIDADE MOBILE
+//  Safari iOS e Android bloqueiam onclick inline que
+//  chamem funções não declaradas no escopo global.
+// =====================================================
+window.cancelBooking       = cancelBooking;
+window.changeShopPassword  = changeShopPassword;
+window.closeModal          = closeModal;
+window.confirmBooking      = confirmBooking;
+window.copyLink            = copyLink;
+window.copyPixCode         = copyPixCode;
+window.deleteBarber        = deleteBarber;
+window.deleteBlock         = deleteBlock;
+window.deleteService       = deleteService;
+window.deleteUser          = deleteUser;
+window.doClientReschedule  = doClientReschedule;
+window.doLogin             = doLogin;
+window.doLogout            = doLogout;
+window.editBarber          = editBarber;
+window.editService         = editService;
+window.editUser            = editUser;
+window.gerarPixPagamento   = gerarPixPagamento;
+window.instalarApp         = instalarApp;
+window.openBarberModal     = openBarberModal;
+window.openBlockModal      = openBlockModal;
+window.openBookingDetail   = openBookingDetail;
+window.openModal           = openModal;
+window.openClientReschedule= openClientReschedule;
+window.openServiceModal    = openServiceModal;
+window.previewBarberPhoto  = previewBarberPhoto;
+window.renderAgenda        = renderAgenda;
+window.resetBarberPhoto    = resetBarberPhoto;
+window.restartBooking      = restartBooking;
+window.saveBarber          = saveBarber;
+window.saveBlock           = saveBlock;
+window.saveEditShop        = saveEditShop;
+window.saveMpToken         = saveMpToken;
+window.saveService         = saveService;
+window.saveUser            = saveUser;
+window.selectClientBarber  = selectClientBarber;
+window.selectClientDate    = selectClientDate;
+window.selectClientService = selectClientService;
+window.selectClientTime    = selectClientTime;
+window.selectDate          = selectDate;
+window.selectRescheduleDate= selectRescheduleDate;
+window.selectRescheduleTime= selectRescheduleTime;
+window.sendBulkWhatsApp    = sendBulkWhatsApp;
+window.sendIndividualConfirm = sendIndividualConfirm;
+window.sendReminder        = sendReminder;
+window.sendWhatsAppConfirm = sendWhatsAppConfirm;
+window.shareWhatsApp       = shareWhatsApp;
+window.switchAgendaView    = switchAgendaView;
+window.switchTab           = switchTab;
+window.testClientScreen    = testClientScreen;
+window.toggleBlockTime     = toggleBlockTime;
+window.toggleBlockType     = toggleBlockType;
+window.toggleUserStatus    = toggleUserStatus;
+window.voltarAoPainel      = voltarAoPainel;
+window.fmtPhone            = fmtPhone;
+window.fmtLoginPhone       = fmtLoginPhone;
+window.saveDepositConfig   = saveDepositConfig;
+window.copyPixKey          = copyPixKey;
+window.renderClientsTab    = renderClientsTab;
+window.changeShopPassword  = changeShopPassword;
+window.instalarApp         = instalarApp;
 </script>
 </body>
 </html>
