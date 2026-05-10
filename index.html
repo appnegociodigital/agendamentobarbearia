@@ -164,6 +164,12 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 .login-logo p { color: rgba(255,255,255,0.7); font-size: 0.8rem; letter-spacing: 2px; }
 .login-box { background: var(--white); border-radius: 16px; padding: 2rem; width: 100%; max-width: 360px; }
 .login-box h2 { font-family: var(--font-title); color: var(--blue); font-size: 1.2rem; margin-bottom: 1.5rem; text-align: center; }
+.btn-biometric { width:100%; padding:0.85rem; border-radius:10px; border:2px solid var(--blue); background:transparent; color:var(--blue); font-family:var(--font-title); font-size:0.95rem; letter-spacing:1px; cursor:pointer; margin-top:0.75rem; display:flex; align-items:center; justify-content:center; gap:0.5rem; transition:all 0.2s; }
+.btn-biometric:hover { background:var(--blue); color:white; }
+.btn-biometric:disabled { opacity:0.4; cursor:not-allowed; }
+.login-divider { text-align:center; color:var(--gray-mid); font-size:0.75rem; margin:0.75rem 0; position:relative; }
+.login-divider::before,.login-divider::after { content:''; position:absolute; top:50%; width:42%; height:1px; background:var(--gray); }
+.login-divider::before { left:0; } .login-divider::after { right:0; }
 .form-group { margin-bottom: 1rem; }
 .form-group label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--gray-dark); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 1px; }
 .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.75rem 1rem; border: 1.5px solid var(--gray); border-radius: 8px; font-family: var(--font-body); font-size: 0.9rem; color: var(--gray-dark); background: var(--off-white); transition: border-color 0.2s; }
@@ -367,6 +373,15 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
       <input type="password" id="login-pass" placeholder="••••" maxlength="4" autocomplete="current-password">
     </div>
     <button class="btn-primary" id="btn-login" onclick="doLogin()">ENTRAR</button>
+    <div class="login-divider" id="biometric-divider" style="display:none">OU</div>
+    <button class="btn-biometric" id="btn-biometric" onclick="doBiometricLogin()" style="display:none">
+      <span id="biometric-icon">👆</span> <span id="biometric-label">ENTRAR COM BIOMETRIA</span>
+    </button>
+    <div style="text-align:center;margin-top:0.5rem">
+      <button onclick="showRegisterBiometric()" id="btn-register-biometric" style="background:none;border:none;color:var(--gray-mid);font-size:0.72rem;cursor:pointer;display:none">
+        + Cadastrar digital/Face ID neste dispositivo
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1399,24 +1414,173 @@ async function doLogin() {
       }
       return;
     }
-    _loginAttempts = 0; // reseta contador após login bem-sucedido
-    currentShop = data;
-    if (data.role === 'admin') {
-      showScreen('admin-screen');
-      document.getElementById('admin-user-name').textContent = data.name;
-      await renderAdminUsers();
-    } else {
-      await loadState();
-      showScreen('user-screen');
-      document.getElementById('user-name-display').textContent = data.name;
-      document.getElementById('shop-topbar-name').textContent = data.name.toUpperCase().substring(0,12);
-      initUserApp();
-    }
+    _loginAttempts = 0;
+    // Oferecer cadastro de biometria após login bem-sucedido
+    _registerBiometric(data.id, data.name);
+    _enterSystem(data);
   } catch(e) { showToast('Erro de conexão!', 'error'); }
   finally { btn.disabled = false; btn.textContent = 'ENTRAR'; }
 }
 
-function doLogout() { currentUser = null; currentShop = null; state = { barbers: [], services: [], bookings: [] }; showScreen('login-screen'); }
+function doLogout() {
+  currentUser = null; currentShop = null;
+  state = { barbers: [], services: [], bookings: [] };
+  showScreen('login-screen');
+  _checkBiometricAvailable();
+}
+
+// =====================================================
+//  BCRYPT — verificação de senha via Edge Function
+// =====================================================
+async function verifyPasswordBcrypt(email, pass) {
+  try {
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/auth-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+      body: JSON.stringify({ email, password: pass })
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.shop || null;
+  } catch(e) {
+    // Fallback: senha em texto puro (compatibilidade durante migração)
+    return null;
+  }
+}
+
+// =====================================================
+//  WEBAUTHN — login por biometria (Digital / Face ID)
+// =====================================================
+const _BIOMETRIC_KEY = 'barber_biometric_cred';
+
+function _checkBiometricAvailable() {
+  if (!window.PublicKeyCredential) return;
+  const cred = localStorage.getItem(_BIOMETRIC_KEY);
+  if (cred) {
+    document.getElementById('btn-biometric').style.display = 'flex';
+    document.getElementById('biometric-divider').style.display = 'block';
+    document.getElementById('btn-register-biometric').style.display = 'none';
+    // Detecta tipo de biometria disponível
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+      if (ok) {
+        const icon = /iPhone|iPad|Mac/i.test(navigator.userAgent) ? '🔐' : '👆';
+        const label = /iPhone|iPad|Mac/i.test(navigator.userAgent) ? 'ENTRAR COM FACE ID / TOUCH ID' : 'ENTRAR COM DIGITAL';
+        document.getElementById('biometric-icon').textContent = icon;
+        document.getElementById('biometric-label').textContent = label;
+      }
+    });
+  } else {
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(ok => {
+      if (ok) {
+        document.getElementById('btn-register-biometric').style.display = 'block';
+      }
+    });
+  }
+}
+
+async function showRegisterBiometric() {
+  const phone = document.getElementById('login-user').value.replace(/\D/g,'');
+  const pass  = document.getElementById('login-pass').value.trim();
+  if (!phone || !pass) {
+    showToast('Faça login normalmente primeiro para cadastrar a biometria.', 'error');
+    return;
+  }
+  showToast('Após o login, a biometria será cadastrada automaticamente.', 'success');
+}
+
+async function _registerBiometric(shopId, shopName) {
+  if (!window.PublicKeyCredential) return;
+  try {
+    const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!ok) return;
+    const enc = new TextEncoder();
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'Barber System', id: location.hostname },
+        user: {
+          id: enc.encode(shopId),
+          name: shopName,
+          displayName: shopName
+        },
+        pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+        timeout: 60000
+      }
+    });
+    if (credential) {
+      const credData = { id: credential.id, shopId };
+      localStorage.setItem(_BIOMETRIC_KEY, JSON.stringify(credData));
+      _checkBiometricAvailable();
+      showToast('✅ Biometria cadastrada! Próximo login pode ser pela digital/Face ID.', 'success');
+    }
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') console.error('Biometric register error:', e);
+  }
+}
+
+async function doBiometricLogin() {
+  const credData = JSON.parse(localStorage.getItem(_BIOMETRIC_KEY) || 'null');
+  if (!credData) { showToast('Biometria não cadastrada.', 'error'); return; }
+  const btn = document.getElementById('btn-biometric');
+  btn.disabled = true;
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [{ id: _b64ToBuffer(credData.id), type: 'public-key' }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+    if (!assertion) { btn.disabled = false; return; }
+    // Biometria confirmada — busca os dados da barbearia pelo shopId salvo
+    showLoading(true);
+    const { data, error } = await db.from('barbershops')
+      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token')
+      .eq('id', credData.shopId).eq('status', 'active').single();
+    showLoading(false);
+    if (error || !data) {
+      showToast('Sessão expirada. Faça login com senha.', 'error');
+      localStorage.removeItem(_BIOMETRIC_KEY);
+      _checkBiometricAvailable();
+      btn.disabled = false;
+      return;
+    }
+    _loginAttempts = 0;
+    _enterSystem(data);
+  } catch(e) {
+    if (e.name === 'NotAllowedError') showToast('Biometria cancelada.', 'error');
+    else showToast('Erro na biometria. Use sua senha.', 'error');
+  }
+  btn.disabled = false;
+}
+
+function _b64ToBuffer(b64url) {
+  const b64 = b64url.replace(/-/g,'+').replace(/_/g,'/');
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf;
+}
+
+function _enterSystem(data) {
+  currentShop = data;
+  if (data.role === 'admin') {
+    showScreen('admin-screen');
+    document.getElementById('admin-user-name').textContent = data.name;
+    renderAdminUsers();
+  } else {
+    loadState().then(() => {
+      showScreen('user-screen');
+      document.getElementById('user-name-display').textContent = data.name;
+      document.getElementById('shop-topbar-name').textContent = data.name.toUpperCase().substring(0,12);
+      initUserApp();
+    });
+  }
+}
 
 // =====================================================
 //  SCREENS & TABS
@@ -2156,20 +2320,31 @@ async function changeShopPassword() {
   const status = document.getElementById('shop-pass-status');
   if (!current || !newPass || !confirm) { status.textContent = '❌ Preencha todos os campos.'; status.style.color = 'red'; return; }
   if (newPass !== confirm) { status.textContent = '❌ Nova senha e confirmação não coincidem.'; status.style.color = 'red'; return; }
-  if (newPass.length < 4) { status.textContent = '❌ A senha deve ter 4 dígitos.'; status.style.color = 'red'; return; }
-  const { data: check, error: passErr } = await db.from('barbershops').select('id').eq('id', currentShop.id).eq('password_hash', current).maybeSingle();
-  if (!check) { status.textContent = '❌ Senha atual incorreta.'; status.style.color = 'red'; return; }
+  if (newPass.length < 4) { status.textContent = '❌ A senha deve ter pelo menos 4 caracteres.'; status.style.color = 'red'; return; }
   showLoading(true);
-  const { error } = await db.from('barbershops').update({ password_hash: newPass }).eq('id', currentShop.id);
-  showLoading(false);
-  if (error) {
-    status.textContent = '❌ Erro ao alterar senha.'; status.style.color = 'red';
-  } else {
-    document.getElementById('shop-pass-current').value = '';
-    document.getElementById('shop-pass-new').value = '';
-    document.getElementById('shop-pass-confirm').value = '';
-    status.textContent = '✅ Senha alterada com sucesso!'; status.style.color = '#4CAF50';
-    setTimeout(() => status.textContent = '', 3000);
+  try {
+    // Usa Edge Function para verificar senha atual e salvar nova com bcrypt
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/auth-change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+      body: JSON.stringify({ shop_id: currentShop.id, current_password: current, new_password: newPass })
+    });
+    const result = await resp.json();
+    showLoading(false);
+    if (!resp.ok || result.error) {
+      status.textContent = '❌ ' + (result.error || 'Erro ao alterar senha.'); status.style.color = 'red';
+    } else {
+      document.getElementById('shop-pass-current').value = '';
+      document.getElementById('shop-pass-new').value = '';
+      document.getElementById('shop-pass-confirm').value = '';
+      status.textContent = '✅ Senha alterada com sucesso!'; status.style.color = '#4CAF50';
+      // Remove biometria salva pois as credenciais mudaram
+      localStorage.removeItem('barber_biometric_cred');
+      setTimeout(() => status.textContent = '', 3000);
+    }
+  } catch(e) {
+    showLoading(false);
+    status.textContent = '❌ Erro de conexão.'; status.style.color = 'red';
   }
 }
 
@@ -2569,6 +2744,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     showLoading(false);
     showScreen('login-screen');
+    _checkBiometricAvailable();
   }
 });
 
