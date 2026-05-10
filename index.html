@@ -104,8 +104,8 @@ if (new URLSearchParams(window.location.search).get('b')) {
   }
 
   function _doPingSupabase(db) {
-    var url = 'https://ymrgjbveanbkcqifytal.supabase.co/rest/v1/barbershops?select=id&limit=1';
-    var key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InltcmdqYnZlYW5ia2NxaWZ5dGFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDczNTYsImV4cCI6MjA5MzQ4MzM1Nn0.UJNPMP_Iv85856U0SeZr76LlzlOcCSZ_0AUuGtztgj8';
+    var url = 'https://qjwbsofpstvjfgtmcqwy.supabase.co/rest/v1/barbershops?select=id&limit=1';
+    var key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqd2Jzb2Zwc3R2amZndG1jcXd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MTczMTIsImV4cCI6MjA5Mzk5MzMxMn0.CNQMs9yf_i-fDh9gBwgAHT137Dp_m-1Togoo0Mb14wo';
     fetch(url, { headers: { 'apikey': key, 'Authorization': 'Bearer ' + key } })
       .then(function(r) {
         if (r.ok) {
@@ -125,8 +125,8 @@ if (new URLSearchParams(window.location.search).get('b')) {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 // EDITE AQUI suas credenciais do Supabase (Settings -> API)
-const SUPABASE_URL_CFG = "https://ymrgjbveanbkcqifytal.supabase.co";
-const SUPABASE_KEY_CFG = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InltcmdqYnZlYW5ia2NxaWZ5dGFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MDczNTYsImV4cCI6MjA5MzQ4MzM1Nn0.UJNPMP_Iv85856U0SeZr76LlzlOcCSZ_0AUuGtztgj8";
+const SUPABASE_URL_CFG = "https://qjwbsofpstvjfgtmcqwy.supabase.co";
+const SUPABASE_KEY_CFG = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqd2Jzb2Zwc3R2amZndG1jcXd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MTczMTIsImV4cCI6MjA5Mzk5MzMxMn0.CNQMs9yf_i-fDh9gBwgAHT137Dp_m-1Togoo0Mb14wo";
 </script>
 <style>
 :root {
@@ -1407,50 +1407,34 @@ async function doLogin() {
   const rawPhone = document.getElementById('login-user').value;
   const email = rawPhone.replace(/[^0-9]/g,'');
   const pass = document.getElementById('login-pass').value.trim();
-  if (!email || !pass) { showToast('Preencha e-mail e senha!', 'error'); return; }
+  if (!email || !pass) { showToast('Preencha os campos!', 'error'); return; }
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'ENTRANDO...';
   try {
-    let shopData = null;
-    // Tenta via Edge Function (bcrypt seguro)
-    try {
-      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/auth-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
-        body: JSON.stringify({ email, password: pass })
-      });
-      if (resp.ok) {
-        const result = await resp.json();
-        shopData = result.shop || null;
-      }
-    } catch(efErr) { /* Edge Function indisponível — usa fallback */ }
-
-    // Fallback: verificação direta no banco (senha em texto puro)
-    if (!shopData) {
-      const { data, error } = await db.from('barbershops')
-        .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token,password_hash')
-        .eq('email', email).eq('status', 'active').single();
-      if (!error && data && data.password_hash === pass) {
-        const { password_hash, ...safe } = data;
-        shopData = safe;
-      }
-    }
-
-    if (!shopData) {
+    // Login via Edge Function auth-login (usa service_role, passa pelo RLS)
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/auth-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+      body: JSON.stringify({ email: email, password: pass })
+    });
+    const result = await resp.json();
+    if (!resp.ok || !result.shop) {
       _loginAttempts++;
       if (_loginAttempts >= 5) {
         _loginBlockedUntil = Date.now() + 60000;
         _loginAttempts = 0;
-        showToast('Acesso bloqueado por 60s apos muitas tentativas.', 'error');
+        showToast('Bloqueado por 60s apos muitas tentativas.', 'error');
       } else {
         showToast('Credenciais invalidas! (' + _loginAttempts + '/5)', 'error');
       }
       return;
     }
     _loginAttempts = 0;
-    _registerBiometric(shopData.id, shopData.name);
-    _enterSystem(shopData);
-  } catch(e) { showToast('Erro de conexao!', 'error'); }
+    _registerBiometric(result.shop.id, result.shop.name);
+    _enterSystem(result.shop);
+  } catch(e) {
+    showToast('Erro de conexao com o servidor!', 'error');
+  }
   finally { btn.disabled = false; btn.textContent = 'ENTRAR'; }
 }
 
