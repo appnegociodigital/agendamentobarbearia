@@ -263,6 +263,11 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 .client-header p { font-size: 0.8rem; opacity: 0.8; margin-top: 0.3rem; }
 .client-body { padding: 0 1rem 2rem; margin-top: -2rem; }
 .client-step { background: var(--white); border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+.reagend-card { background: linear-gradient(135deg,#1a237e,#283593); border-radius: 14px; padding: 1.1rem 1.2rem; margin-top: 1rem; color: white; }
+.reagend-card h4 { font-family: var(--font-title); letter-spacing: 1px; font-size: 0.95rem; margin-bottom: 0.5rem; }
+.reagend-info { font-size: 0.8rem; opacity: 0.85; line-height: 1.7; margin-bottom: 0.75rem; }
+.btn-reagend { width: 100%; padding: 0.8rem; border-radius: 10px; border: 2px solid white; background: transparent; color: white; font-family: var(--font-title); font-size: 0.85rem; letter-spacing: 1px; cursor: pointer; margin-top: 0.4rem; }
+.btn-reagend:disabled { opacity: 0.5; cursor: not-allowed; }
 .step-title { font-family: var(--font-title); color: var(--blue); font-size: 1rem; letter-spacing: 1px; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
 .step-num { background: var(--red); color: var(--white); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
 .barber-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -626,8 +631,14 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
     <div id="client-step-1" class="client-step">
       <div class="step-title"><div class="step-num">1</div> SEUS DADOS</div>
       <div class="form-group"><label>Seu Nome *</label><input type="text" id="client-name" placeholder="Como você se chama?"></div>
-      <div class="form-group"><label>WhatsApp *</label><input type="tel" id="client-whatsapp" placeholder="(85) 99999-9999"></div>
-      <button class="btn-primary" onclick="clientStep(2)">PRÓXIMO →</button>
+      <div class="form-group"><label>WhatsApp *</label><input type="tel" id="client-whatsapp" placeholder="(85) 99999-9999" oninput="checkExistingBooking(this.value)"></div>
+      <div id="reagend-card-box" style="display:none" class="reagend-card">
+        <h4>AGENDAMENTO ENCONTRADO</h4>
+        <div class="reagend-info" id="reagend-card-info"></div>
+        <button class="btn-reagend" id="btn-reagend-action" onclick="iniciarReagendamento()">REAGENDAR ESTE HORARIO</button>
+        <button class="btn-reagend" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.4);font-size:0.78rem" onclick="ocultarReagendCard()">Fazer novo agendamento</button>
+      </div>
+      <button class="btn-primary" onclick="clientStep(2)" style="margin-top:1rem">PRÓXIMO →</button>
     </div>
     <div id="client-step-2" class="client-step" style="display:none">
       <div class="step-title"><div class="step-num">2</div> ESCOLHA O BARBEIRO</div>
@@ -1373,6 +1384,7 @@ async function loadPublicState(shopId) {
     state.services = services || [];
     state.bookings = bookings || [];
     state.blocks = blocks || [];
+    publicState = { barbers: state.barbers, services: state.services, blocks: state.blocks };
     return true;
   } catch(e) { return false; }
 }
@@ -2104,6 +2116,67 @@ window.clientStep = function clientStep(step) {
   if (step === 5) renderClientConfirm();
 };
 
+// ── Reagendamento ─────────────────────────────────────────────────────────────
+let _existingBooking = null;
+let _checkTimer = null;
+
+function checkExistingBooking(waVal) {
+  var wa = waVal.replace(/[^0-9]/g, '');
+  var box = document.getElementById('reagend-card-box');
+  _existingBooking = null;
+  if (box) box.style.display = 'none';
+  if (wa.length < 10) return;
+  clearTimeout(_checkTimer);
+  _checkTimer = setTimeout(async function() {
+    var today = getTodayStr();
+    var res = await db.from('bookings')
+      .select('id,client_name,barber_id,service_id,booking_date,booking_time,client_whatsapp')
+      .eq('shop_id', clientShopData.id).eq('status', 'confirmed')
+      .gte('booking_date', today).order('booking_date').order('booking_time');
+    var bookings = res.data;
+    if (!bookings || bookings.length === 0) return;
+    var found = bookings.find(function(b){ return b.client_whatsapp.replace(/[^0-9]/g,'') === wa; });
+    if (!found) return;
+    var dt = new Date(found.booking_date + 'T' + found.booking_time + ':00');
+    var diffH = (dt - new Date()) / 3600000;
+    var pode = diffH >= 24;
+    var br = publicState.barbers.find(function(b){ return b.id === found.barber_id; });
+    var sv = publicState.services.find(function(s){ return s.id === found.service_id; });
+    var info = document.getElementById('reagend-card-info');
+    var btn  = document.getElementById('btn-reagend-action');
+    if (!info || !btn) return;
+    info.innerHTML = '<b>' + (br ? br.name : 'Barbeiro') + '</b> &mdash; ' + (sv ? sv.name : 'Servico') + '<br>' + formatDate(found.booking_date) + ' as ' + found.booking_time;
+    btn.textContent = pode ? 'REAGENDAR ESTE HORARIO' : 'Prazo encerrado (menos de 24h)';
+    btn.disabled = !pode;
+    if (!pode) info.innerHTML += '<br><small style="color:#ffcc80">Reagendamento somente com mais de 24h de antecedencia.</small>';
+    if (pode) _existingBooking = found;
+    if (box) box.style.display = 'block';
+    var nameEl = document.getElementById('client-name');
+    if (found.client_name && nameEl && !nameEl.value.trim()) nameEl.value = found.client_name;
+  }, 800);
+}
+
+function ocultarReagendCard() {
+  var box = document.getElementById('reagend-card-box');
+  if (box) box.style.display = 'none';
+  _existingBooking = null;
+}
+
+function iniciarReagendamento() {
+  if (!_existingBooking) return;
+  clientFlow._reagendamentoId = _existingBooking.id;
+  clientFlow.name = (document.getElementById('client-name').value.trim()) || _existingBooking.client_name;
+  clientFlow.whatsapp = document.getElementById('client-whatsapp').value.trim();
+  document.getElementById('client-name').value = clientFlow.name;
+  var box = document.getElementById('reagend-card-box');
+  if (box) box.style.display = 'none';
+  clientStep(2);
+}
+
+window.checkExistingBooking = checkExistingBooking;
+window.ocultarReagendCard   = ocultarReagendCard;
+window.iniciarReagendamento  = iniciarReagendamento;
+
 function renderClientBarbers() {
   document.getElementById('client-barber-grid').innerHTML = state.barbers.filter(b => b.active).map(b => {
     const initials = b.name.split(' ').map(n => n[0]).join('').substring(0, 2);
@@ -2486,6 +2559,10 @@ async function doConfirmBooking() {
   });
   if (btn) { btn.disabled = false; btn.textContent = '✅ CONFIRMAR AGENDAMENTO'; }
   if (error) { showToast('Erro ao confirmar! Tente novamente.', 'error'); return; }
+  if (clientFlow._reagendamentoId) {
+    await db.from('bookings').delete().eq('id', clientFlow._reagendamentoId);
+    clientFlow._reagendamentoId = null;
+  }
   await loadPublicState(clientShopData.id);
   document.getElementById('success-summary-text').textContent = `Agendamento confirmado com ${br ? br.name : ''}!`;
   const depositInfo = clientShopData.deposit_value > 0 ? `<div class="confirm-row"><span class="confirm-label">Sinal pago</span><span>R$${Number(clientShopData.deposit_value).toFixed(2)}</span></div>` : '';
