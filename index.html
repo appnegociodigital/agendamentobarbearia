@@ -3,7 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <title>Barber System</title>
+<script>
+// Força HTTPS — redireciona se acessado via HTTP (exceto localhost)
+if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+  location.replace('https:' + location.href.substring(5));
+}
+// Executado antes do CSS: se for link de cliente, esconde tudo para evitar flash do login
+if (new URLSearchParams(window.location.search).get('b')) {
+  document.documentElement.style.visibility = 'hidden';
+}
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="icon-192x192.png">
 <link rel="apple-touch-icon" href="icon-192x192.png">
@@ -337,7 +350,7 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 <!-- =============================================
      TELA DE LOGIN
 ============================================= -->
-<div class="screen active" id="login-screen">
+<div class="screen" id="login-screen">
   <div class="login-logo">
     <div class="scissors-icon">✂️</div>
     <h1>BARBER SYSTEM</h1>
@@ -1212,6 +1225,17 @@ function initSupabase() {
   return true;
 }
 
+// Sanitização contra XSS — escapa caracteres perigosos antes de inserir no DOM
+function sanitize(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 function saveConfig() { /* credenciais embutidas */ }
 
 function showConfigScreen() { showScreen('login-screen'); }
@@ -1308,10 +1332,10 @@ async function loadState() {
   showLoading(true);
   try {
     const [{ data: barbers }, { data: services }, { data: bookings }, { data: blocks }] = await Promise.all([
-      db.from('barbers').select('*').eq('shop_id', currentShop.id).order('created_at'),
-      db.from('services').select('*').eq('shop_id', currentShop.id).order('created_at'),
-      db.from('bookings').select('*').eq('shop_id', currentShop.id).gte('booking_date', getDateStr(-30)).order('booking_date').order('booking_time'),
-      db.from('barber_blocks').select('*').eq('shop_id', currentShop.id).gte('block_date', getDateStr(0))
+      db.from('barbers').select('id,shop_id,name,photo_url,days,start_time,end_time,interval_min,active,created_at').eq('shop_id', currentShop.id).order('created_at'),
+      db.from('services').select('id,shop_id,name,price,duration_min,created_at').eq('shop_id', currentShop.id).order('created_at'),
+      db.from('bookings').select('id,shop_id,barber_id,service_id,client_name,client_whatsapp,booking_date,booking_time,status,created_at').eq('shop_id', currentShop.id).gte('booking_date', getDateStr(-30)).order('booking_date').order('booking_time'),
+      db.from('barber_blocks').select('id,shop_id,barber_id,block_date,block_times,reason,created_at').eq('shop_id', currentShop.id).gte('block_date', getDateStr(0))
     ]);
     state.barbers = barbers || [];
     state.services = services || [];
@@ -1325,10 +1349,10 @@ async function loadPublicState(shopId) {
   if (!db) return false;
   try {
     const [{ data: barbers }, { data: services }, { data: bookings }, { data: blocks }] = await Promise.all([
-      db.from('barbers').select('*').eq('shop_id', shopId).eq('active', true),
-      db.from('services').select('*').eq('shop_id', shopId),
+      db.from('barbers').select('id,name,photo_url,days,start_time,end_time,interval_min,active').eq('shop_id', shopId).eq('active', true),
+      db.from('services').select('id,name,price,duration_min').eq('shop_id', shopId),
       db.from('bookings').select('booking_date,booking_time,barber_id').eq('shop_id', shopId).gte('booking_date', getTodayStr()),
-      db.from('barber_blocks').select('*').eq('shop_id', shopId).gte('block_date', getTodayStr())
+      db.from('barber_blocks').select('id,barber_id,block_date,block_times').eq('shop_id', shopId).gte('block_date', getTodayStr())
     ]);
     state.barbers = barbers || [];
     state.services = services || [];
@@ -1342,7 +1366,17 @@ async function loadPublicState(shopId) {
 //  AUTH (simples - senha em texto, sem JWT)
 //  Para produção real use Supabase Auth
 // =====================================================
+// Rate limiting de login — máximo 5 tentativas por sessão
+let _loginAttempts = 0;
+let _loginBlockedUntil = 0;
+
 async function doLogin() {
+  const now = Date.now();
+  if (_loginBlockedUntil > now) {
+    const seg = Math.ceil((_loginBlockedUntil - now) / 1000);
+    showToast('Muitas tentativas. Aguarde ' + seg + 's.', 'error');
+    return;
+  }
   const rawPhone = document.getElementById('login-user').value;
   const email = rawPhone.replace(/[^0-9]/g,'');
   const pass = document.getElementById('login-pass').value.trim();
@@ -1350,9 +1384,22 @@ async function doLogin() {
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'ENTRANDO...';
   try {
+    // Verifica credenciais — traz apenas campos necessários para a sessão
     const { data, error } = await db.from('barbershops')
-      .select('*').eq('email', email).eq('password_hash', pass).eq('status', 'active').single();
-    if (error || !data) { showToast('Credenciais inválidas!', 'error'); return; }
+      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token')
+      .eq('email', email).eq('password_hash', pass).eq('status', 'active').single();
+    if (error || !data) {
+      _loginAttempts++;
+      if (_loginAttempts >= 5) {
+        _loginBlockedUntil = Date.now() + 60000; // bloqueia por 60s
+        _loginAttempts = 0;
+        showToast('Acesso bloqueado por 60s após muitas tentativas.', 'error');
+      } else {
+        showToast(`Credenciais inválidas! (${_loginAttempts}/5)`, 'error');
+      }
+      return;
+    }
+    _loginAttempts = 0; // reseta contador após login bem-sucedido
     currentShop = data;
     if (data.role === 'admin') {
       showScreen('admin-screen');
@@ -1455,7 +1502,7 @@ function selectDate(date) { selectedAgendaDate = date; renderDateTabs(); renderA
 
 function populateAgendaBarberFilter() {
   const sel = document.getElementById('agenda-barber-filter');
-  sel.innerHTML = '<option value="all">Todos os barbeiros</option>' + state.barbers.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  sel.innerHTML = '<option value="all">Todos os barbeiros</option>' + state.barbers.map(b => `<option value="${sanitize(b.id)}">${sanitize(b.name)}</option>`).join('');
 }
 
 function renderAgenda() {
@@ -1503,13 +1550,13 @@ function renderBarbers() {
   const container = document.getElementById('barber-list');
   if (state.barbers.length === 0) { container.innerHTML = '<div class="empty-state">Nenhum barbeiro cadastrado</div>'; return; }
   container.innerHTML = state.barbers.map(b => {
-    const initials = b.name.split(' ').map(n => n[0]).join('').substring(0, 2);
-    const avatarContent = b.photo_url ? `<img src="${b.photo_url}" alt="${b.name}">` : initials;
+    const initials = sanitize(b.name).split(' ').map(n => n[0]).join('').substring(0, 2);
+    const avatarContent = b.photo_url ? `<img src="${sanitize(b.photo_url)}" alt="${sanitize(b.name)}">` : initials;
     return `<div class="barber-card">
       <div class="barber-avatar">${avatarContent}</div>
       <div class="barber-info">
-        <div class="barber-name">${b.name}</div>
-        <div class="barber-days">${(b.days || []).join(', ')} · ${b.start_time} – ${b.end_time}</div>
+        <div class="barber-name">${sanitize(b.name)}</div>
+        <div class="barber-days">${sanitize((b.days || []).join(', '))} · ${sanitize(b.start_time)} – ${sanitize(b.end_time)}</div>
         <div class="barber-days" style="color:var(--gray-mid)">Intervalo: ${b.interval_min}min</div>
       </div>
       <div class="barber-actions">
@@ -1552,8 +1599,15 @@ function editBarber(id) {
   openModal('modal-add-barber');
 }
 
+function validateInput(value, field) {
+  if (!value || value.trim() === '') return `O campo ${field} é obrigatório.`;
+  if (/<[^>]*>/.test(value)) return `O campo ${field} contém caracteres inválidos.`;
+  return null;
+}
+
 async function saveBarber() {
   const name = document.getElementById('barber-name-input').value.trim();
+  if (/<[^>]*>/.test(name)) { showToast('Nome contém caracteres inválidos.', 'error'); return; }
   const days = [...document.querySelectorAll('.day-check:checked')].map(c => c.value);
   const start_time = document.getElementById('barber-start-time').value;
   const end_time = document.getElementById('barber-end-time').value;
@@ -1829,10 +1883,13 @@ async function deleteUser(id) {
 // =====================================================
 async function initClientScreen(slug) {
   showLoading(true);
-  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit,mp_token').eq('slug', slug).eq('status', 'active').single();
+  // Tela pública: NÃO inclui mp_token (dado sensível da barbearia)
+  // O Edge Function mp-payment busca o token internamente pelo shop_id
+  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit').eq('slug', slug).eq('status', 'active').single();
   if (!shop) {
     showLoading(false);
     // Slug inválido ou banco não configurado — mostrar tela de login
+    document.documentElement.style.visibility = '';
     showScreen('login-screen');
     showToast('Barbearia não encontrada. Verifique o link.', 'error');
     return;
@@ -1844,6 +1901,7 @@ async function initClientScreen(slug) {
   document.getElementById('client-shop-name').textContent = shop.name.toUpperCase();
   document.title = shop.name + ' · Agendamento';
   showScreen('client-screen');
+  document.documentElement.style.visibility = '';
   clientStep(1);
   renderClientDateTabs();
 }
@@ -2099,7 +2157,7 @@ async function changeShopPassword() {
   if (!current || !newPass || !confirm) { status.textContent = '❌ Preencha todos os campos.'; status.style.color = 'red'; return; }
   if (newPass !== confirm) { status.textContent = '❌ Nova senha e confirmação não coincidem.'; status.style.color = 'red'; return; }
   if (newPass.length < 4) { status.textContent = '❌ A senha deve ter 4 dígitos.'; status.style.color = 'red'; return; }
-  const { data: check } = await db.from('barbershops').select('id').eq('id', currentShop.id).eq('password_hash', current).single();
+  const { data: check, error: passErr } = await db.from('barbershops').select('id').eq('id', currentShop.id).eq('password_hash', current).maybeSingle();
   if (!check) { status.textContent = '❌ Senha atual incorreta.'; status.style.color = 'red'; return; }
   showLoading(true);
   const { error } = await db.from('barbershops').update({ password_hash: newPass }).eq('id', currentShop.id);
@@ -2144,28 +2202,29 @@ async function gerarPixPagamento() {
   document.getElementById('pix-error-section').style.display = 'none';
 
   const val = clientShopData ? clientShopData.deposit_value || 0 : 0;
-  const mpToken = clientShopData ? clientShopData.mp_token || '' : '';
+  const shopId = clientShopData ? clientShopData.id || '' : '';
   const sv = getService(clientFlow.serviceId);
   const referenceId = 'AGENDA-' + Date.now();
 
-  if (!mpToken) {
+  if (!shopId) {
     document.getElementById('pix-loading').style.display = 'none';
     document.getElementById('pix-error-section').style.display = 'block';
-    document.getElementById('pix-error-msg').textContent = 'Token Mercado Pago nao configurado. Contate a barbearia.';
+    document.getElementById('pix-error-msg').textContent = 'Erro: barbearia não identificada. Recarregue a página.';
     return;
   }
 
   try {
+    // O mp_token NÃO é enviado pelo cliente — o Edge Function busca internamente pelo shop_id
     const resp = await fetch(SUPABASE_FUNCTIONS_URL + '/mp-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
       body: JSON.stringify({
+        shop_id: shopId,
         amount: val,
         reference_id: referenceId,
         description: 'Sinal - ' + (sv ? sv.name : 'Servico') + ' - ' + clientFlow.name,
         payer_name: clientFlow.name,
-        payer_whatsapp: clientFlow.whatsapp,
-        mp_token: mpToken
+        payer_whatsapp: clientFlow.whatsapp
       })
     });
     const data = await resp.json();
@@ -2194,7 +2253,7 @@ async function gerarPixPagamento() {
       document.getElementById('pix-expiry').textContent = 'Expira as ' + exp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
     }
 
-    _pixPollingInterval = setInterval(function() { verificarPagamentoPix(mpToken); }, 5000);
+    _pixPollingInterval = setInterval(function() { verificarPagamentoPix(); }, 5000);
 
   } catch (e) {
     document.getElementById('pix-loading').style.display = 'none';
@@ -2203,14 +2262,15 @@ async function gerarPixPagamento() {
   }
 }
 
-async function verificarPagamentoPix(mpToken) {
+async function verificarPagamentoPix() {
   if (!_pixOrderId) return;
-  var token = mpToken || (clientShopData ? clientShopData.mp_token || '' : '');
+  var shopId = clientShopData ? clientShopData.id || '' : '';
   try {
+    // O mp_token NÃO é enviado pelo cliente — o Edge Function busca internamente pelo shop_id
     const resp = await fetch(SUPABASE_FUNCTIONS_URL + '/mp-check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
-      body: JSON.stringify({ payment_id: _pixOrderId, mp_token: token })
+      body: JSON.stringify({ payment_id: _pixOrderId, shop_id: shopId })
     });
     const data = await resp.json();
 
@@ -2483,12 +2543,31 @@ function _showBulkModal() {
 // =====================================================
 //  BOOTSTRAP - decide qual tela mostrar
 // =====================================================
+// Esconde todas as telas imediatamente se for link de cliente (evita piscar login)
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('b');
+  if (slug && /^[a-z0-9][a-z0-9-]{1,}$/i.test(slug)) {
+    // Remove o "active" da login-screen antes de qualquer renderização
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.screen').forEach(function(s) {
+        s.classList.remove('active');
+      });
+    });
+  }
+})();
+
 document.addEventListener('DOMContentLoaded', async () => {
+  // Garante que nenhuma tela fica visível durante o carregamento
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  // Mostra o loading enquanto carrega
+  showLoading(true);
   initSupabase();
   const slug = getSlugFromUrl();
   if (slug) {
     await initClientScreen(slug);
   } else {
+    showLoading(false);
     showScreen('login-screen');
   }
 });
@@ -2537,7 +2616,8 @@ let _adminUsers = [];
 
 async function renderAdminUsers() {
   showLoading(true);
-  const { data: users } = await db.from('barbershops').select('*').order('created_at');
+  // Admin: não traz password_hash nem mp_token nas listagens
+  const { data: users } = await db.from('barbershops').select('id,name,slug,email,role,status,address,deposit_value,pix_key,block_credit,created_at').order('created_at');
   showLoading(false);
   _adminUsers = users || [];
   const list = _adminUsers.filter(u => u.role !== 'admin');
