@@ -1411,26 +1411,46 @@ async function doLogin() {
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'ENTRANDO...';
   try {
-    // Verifica credenciais — traz apenas campos necessários para a sessão
-    const { data, error } = await db.from('barbershops')
-      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token')
-      .eq('email', email).eq('password_hash', pass).eq('status', 'active').single();
-    if (error || !data) {
+    let shopData = null;
+    // Tenta via Edge Function (bcrypt seguro)
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/auth-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+        body: JSON.stringify({ email, password: pass })
+      });
+      if (resp.ok) {
+        const result = await resp.json();
+        shopData = result.shop || null;
+      }
+    } catch(efErr) { /* Edge Function indisponível — usa fallback */ }
+
+    // Fallback: verificação direta no banco (senha em texto puro)
+    if (!shopData) {
+      const { data, error } = await db.from('barbershops')
+        .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token,password_hash')
+        .eq('email', email).eq('status', 'active').single();
+      if (!error && data && data.password_hash === pass) {
+        const { password_hash, ...safe } = data;
+        shopData = safe;
+      }
+    }
+
+    if (!shopData) {
       _loginAttempts++;
       if (_loginAttempts >= 5) {
-        _loginBlockedUntil = Date.now() + 60000; // bloqueia por 60s
+        _loginBlockedUntil = Date.now() + 60000;
         _loginAttempts = 0;
-        showToast('Acesso bloqueado por 60s após muitas tentativas.', 'error');
+        showToast('Acesso bloqueado por 60s apos muitas tentativas.', 'error');
       } else {
-        showToast(`Credenciais inválidas! (${_loginAttempts}/5)`, 'error');
+        showToast('Credenciais invalidas! (' + _loginAttempts + '/5)', 'error');
       }
       return;
     }
     _loginAttempts = 0;
-    // Oferecer cadastro de biometria após login bem-sucedido
-    _registerBiometric(data.id, data.name);
-    _enterSystem(data);
-  } catch(e) { showToast('Erro de conexão!', 'error'); }
+    _registerBiometric(shopData.id, shopData.name);
+    _enterSystem(shopData);
+  } catch(e) { showToast('Erro de conexao!', 'error'); }
   finally { btn.disabled = false; btn.textContent = 'ENTRAR'; }
 }
 
@@ -2067,7 +2087,7 @@ async function initClientScreen(slug) {
     // Slug inválido ou banco não configurado — mostrar tela de login
     document.documentElement.style.visibility = '';
     showScreen('login-screen');
-    showToast('Barbearia não encontrada. Verifique o link.', 'error');
+    showToast('Barbearia nao encontrada. Verifique o link.', 'error');
     return;
   }
   clientShopData = shop;
@@ -2076,8 +2096,8 @@ async function initClientScreen(slug) {
   showLoading(false);
   document.getElementById('client-shop-name').textContent = shop.name.toUpperCase();
   document.title = shop.name + ' · Agendamento';
-  showScreen('client-screen');
   document.documentElement.style.visibility = '';
+  showScreen('client-screen');
   clientStep(1);
   renderClientDateTabs();
 }
@@ -2817,9 +2837,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSupabase();
   const slug = getSlugFromUrl();
   if (slug) {
+    // Mantém tudo oculto até carregar dados do cliente
     await initClientScreen(slug);
   } else {
     showLoading(false);
+    document.documentElement.style.visibility = '';
     showScreen('login-screen');
     _checkBiometricAvailable();
   }
