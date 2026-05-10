@@ -1582,9 +1582,16 @@ async function saveBarber() {
 }
 
 async function deleteBarber(id) {
-  if (!confirm('Excluir este barbeiro? Os agendamentos vinculados serão mantidos.')) return;
+  const barber = getBarber(id);
+  const nomeBarber = barber ? barber.name : 'este barbeiro';
+  if (!confirm(`Excluir ${nomeBarber}?\n\nAgendamentos e bloqueios vinculados também serão removidos.`)) return;
   showLoading(true);
   try {
+    // 1. Remove bloqueios de agenda do barbeiro
+    await db.from('barber_blocks').delete().eq('barber_id', id);
+    // 2. Remove agendamentos vinculados ao barbeiro
+    await db.from('bookings').delete().eq('barber_id', id);
+    // 3. Agora pode excluir o barbeiro sem erro de chave estrangeira
     const { error } = await db.from('barbers').delete().eq('id', id);
     if (error) {
       showLoading(false);
