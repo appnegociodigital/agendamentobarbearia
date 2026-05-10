@@ -1694,12 +1694,25 @@ async function cancelBooking() {
   showToast('Agendamento cancelado!', 'success');
 }
 
+function buildLembreteMsg(b) {
+  const br = getBarber(b.barber_id); const sv = getService(b.service_id);
+  const depositVal = currentShop && currentShop.deposit_value > 0 ? Number(currentShop.deposit_value) : 0;
+  const sinalInfo = depositVal > 0 ? `\n💸 Sinal de pagamento: R$${depositVal.toFixed(2)}` : '';
+  return encodeURIComponent(
+    `🔔 *Lembrete de Agendamento!*\n` +
+    `✂️ Barbeiro: ${br ? br.name : ''}\n` +
+    `💈 Serviço: ${sv ? sv.name : ''}\n` +
+    `📅 Data: ${formatDate(b.booking_date)}\n` +
+    `⏰ Horário: ${b.booking_time}` +
+    sinalInfo +
+    `\nAguardamos você no dia e horário combinado! 😊`
+  );
+}
+
 function sendReminder(bookingId) {
   const b = state.bookings.find(bk => bk.id === bookingId); if (!b) return;
-  const br = getBarber(b.barber_id); const sv = getService(b.service_id);
-  const msg = encodeURIComponent(`🔔 *Lembrete de Agendamento!*\n\n✂️ Barbeiro: ${br ? br.name : ''}\n💈 Serviço: ${sv ? sv.name : ''}\n📅 Data: ${formatDate(b.booking_date)}\n⏰ Horário: ${b.booking_time}\n\nTe esperamos! 😊`);
   const wa = b.client_whatsapp.replace(/\D/g, '');
-  openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
+  openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${buildLembreteMsg(b)}`);
 }
 
 // =====================================================
@@ -2399,9 +2412,8 @@ async function doClientReschedule() {
 //  ENVIO EM LOTE / INDIVIDUAL
 // =====================================================
 function buildConfirmMsg(b) {
-  const br = getBarber(b.barber_id); const sv = getService(b.service_id);
-  // Mensagem manual enviada pela barbearia — formato simples e direto
-  return encodeURIComponent(`✅ *Agendamento Confirmado!*\n✂️ Barbeiro: ${br ? br.name : ''}\n💈 Serviço: ${sv ? sv.name : ''}\n📅 Data: ${formatDate(b.booking_date)}\n⏰ Horário: ${b.booking_time}\n💰 Valor: R$${sv ? Number(sv.price).toFixed(2) : '0'}\nAté logo! 😊`);
+  // Usa o mesmo formato de lembrete para envio em lote e individual da agenda
+  return buildLembreteMsg(b);
 }
 
 function sendIndividualConfirm(bookingId) {
@@ -2645,6 +2657,7 @@ window.selectRescheduleTime= selectRescheduleTime;
 window.sendBulkWhatsApp    = sendBulkWhatsApp;
 window._showBulkModal       = _showBulkModal;
 window.sendIndividualConfirm = sendIndividualConfirm;
+window.buildLembreteMsg    = buildLembreteMsg;
 window.sendReminder        = sendReminder;
 window.sendWhatsAppConfirm = sendWhatsAppConfirm;
 window.shareWhatsApp       = shareWhatsApp;
