@@ -667,6 +667,41 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 </div>
 
 <!-- MODALS -->
+<!-- MODAL ENVIO EM LOTE WHATSAPP -->
+<div class="modal-overlay" id="modal-bulk-wa">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">📱 ENVIAR CONFIRMAÇÃO</span>
+      <button class="modal-close" onclick="closeModal('modal-bulk-wa')">✕</button>
+    </div>
+    <!-- barra de progresso -->
+    <div style="background:var(--gray);border-radius:20px;height:6px;margin-bottom:1rem;overflow:hidden">
+      <div id="bulk-progress-bar" style="height:100%;background:var(--red);border-radius:20px;width:0%;transition:width 0.3s"></div>
+    </div>
+    <div style="text-align:center;font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem">
+      Cliente <span id="bulk-progress" style="font-weight:700;color:var(--blue)">1 de 1</span>
+    </div>
+    <!-- dados do cliente -->
+    <div style="background:var(--off-white);border-radius:10px;padding:1rem;margin-bottom:1rem">
+      <div style="font-family:var(--font-title);color:var(--blue);font-size:1rem;margin-bottom:0.25rem" id="bulk-client-name">Cliente</div>
+      <div style="font-size:0.85rem;color:#25D366;font-weight:600" id="bulk-client-wa">WhatsApp</div>
+      <div style="font-size:0.75rem;color:var(--gray-mid);margin-top:0.25rem" id="bulk-client-info">Serviço · Barbeiro · Data</div>
+    </div>
+    <div class="modal-actions" style="flex-direction:column;gap:0.5rem">
+      <button id="btn-bulk-send" class="btn-primary" style="background:#25D366;width:100%">
+        📱 ABRIR WHATSAPP E ENVIAR
+      </button>
+      <button id="btn-bulk-next" class="btn-secondary" style="width:100%">
+        PRÓXIMO CLIENTE →
+      </button>
+      <button onclick="closeModal('modal-bulk-wa')" style="background:none;border:none;color:var(--gray-mid);font-size:0.8rem;cursor:pointer;padding:0.25rem">
+        Cancelar envio
+      </button>
+    </div>
+  </div>
+</div>
+
+
 <div class="modal-overlay" id="modal-add-barber">
   <div class="modal">
     <div class="modal-header">
@@ -966,7 +1001,6 @@ function renderBlockTimesGrid() {
   const date = document.getElementById('block-date').value;
   const barber = getBarber(barberId);
   if (!barber || !date) { document.getElementById('block-times-grid').innerHTML = '<div style="color:var(--gray-mid);font-size:0.8rem">Selecione a data primeiro</div>'; return; }
-  // Generate all slots for this barber (ignore existing blocks for this purpose)
   const [sh, sm] = barber.start_time.split(':').map(Number);
   const [eh, em] = barber.end_time.split(':').map(Number);
   const allSlots = []; let cur = sh * 60 + sm; const end = eh * 60 + em;
@@ -976,9 +1010,23 @@ function renderBlockTimesGrid() {
     allSlots.push(`${h}:${m}`); cur += barber.interval_min;
   }
   if (allSlots.length === 0) { document.getElementById('block-times-grid').innerHTML = '<div style="color:var(--gray-mid);font-size:0.8rem">Barbeiro não trabalha neste dia</div>'; return; }
-  document.getElementById('block-times-grid').innerHTML = allSlots.map(t =>
-    `<button type="button" class="time-btn" id="bslot-${t.replace(':','-')}" onclick="toggleBlockTime('${t}', this)" style="font-size:0.8rem;padding:0.45rem">${t}</button>`
-  ).join('');
+  // Horários que já têm agendamento confirmado — não podem ser bloqueados
+  const bookedTimes = getBookingsForDate(date, barberId).map(b => b.booking_time);
+  const hasBooked = bookedTimes.length > 0;
+  document.getElementById('block-times-grid').innerHTML = allSlots.map(t => {
+    const isBooked = bookedTimes.includes(t);
+    if (isBooked) {
+      // Exibe cinza com ícone de cadeado — não pode ser selecionado
+      return `<button type="button" class="time-btn unavailable" title="Horário ocupado — existe agendamento" style="font-size:0.75rem;padding:0.45rem;cursor:not-allowed;opacity:0.5" disabled>${t}<br><span style="font-size:0.6rem">👤 ocupado</span></button>`;
+    }
+    return `<button type="button" class="time-btn" id="bslot-${t.replace(':','-')}" onclick="toggleBlockTime('${t}', this)" style="font-size:0.8rem;padding:0.45rem">${t}</button>`;
+  }).join('');
+  if (hasBooked) {
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:0.72rem;color:var(--gray-mid);margin-top:0.5rem;grid-column:1/-1';
+    info.textContent = '👤 Horários ocupados não podem ser bloqueados.';
+    document.getElementById('block-times-grid').appendChild(info);
+  }
 }
 
 function toggleBlockTime(time, el) {
@@ -996,8 +1044,24 @@ async function saveBlock() {
   if (!date) { showToast('Selecione uma data!', 'error'); return; }
   let block_times = [];
   if (type === 'times') {
-    block_times = [...document.querySelectorAll('#block-times-grid .time-btn.selected')].map(b => b.textContent.trim());
+    block_times = [...document.querySelectorAll('#block-times-grid .time-btn.selected')].map(b => b.textContent.trim().split('\n')[0]);
     if (block_times.length === 0) { showToast('Selecione ao menos um horário!', 'error'); return; }
+  }
+  // ── Verifica se há agendamentos que conflitam com o bloqueio ──────────────
+  const bookedTimes = getBookingsForDate(date, barberId).map(b => b.booking_time);
+  if (type === 'day' && bookedTimes.length > 0) {
+    showToast(
+      `Não é possível bloquear o dia inteiro: existem ${bookedTimes.length} agendamento(s) em ${bookedTimes.join(', ')}.`,
+      'error'
+    );
+    return;
+  }
+  if (type === 'times') {
+    const conflitos = block_times.filter(t => bookedTimes.includes(t));
+    if (conflitos.length > 0) {
+      showToast(`Horário(s) com agendamento: ${conflitos.join(', ')}. Remova-os da seleção.`, 'error');
+      return;
+    }
   }
   // Remove existing block for same barber+date before inserting
   await db.from('barber_blocks').delete().eq('barber_id', barberId).eq('block_date', date);
@@ -1518,11 +1582,23 @@ async function saveBarber() {
 }
 
 async function deleteBarber(id) {
-  if (!confirm('Excluir este barbeiro?')) return;
+  if (!confirm('Excluir este barbeiro? Os agendamentos vinculados serão mantidos.')) return;
   showLoading(true);
-  await db.from('barbers').delete().eq('id', id);
-  await loadState(); renderBarbers(); populateAgendaBarberFilter();
-  showLoading(false); showToast('Barbeiro removido!', 'success');
+  try {
+    const { error } = await db.from('barbers').delete().eq('id', id);
+    if (error) {
+      showLoading(false);
+      showToast('Erro ao excluir barbeiro: ' + error.message, 'error');
+      return;
+    }
+    await loadState();
+    renderBarbers();
+    populateAgendaBarberFilter();
+    showToast('Barbeiro removido com sucesso!', 'success');
+  } catch(e) {
+    showToast('Erro de conexão ao excluir barbeiro.', 'error');
+  }
+  showLoading(false);
 }
 
 // =====================================================
@@ -2335,22 +2411,54 @@ function sendIndividualConfirm(bookingId) {
   openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
 }
 
+// ── Envio em lote: abre um por vez via modal ─────────────────────────────────
+let _bulkQueue = [];
+let _bulkIndex = 0;
+
 function sendBulkWhatsApp(day) {
   const targetDate = day === 'today' ? getTodayStr() : getDateStr(1);
   const bookings = state.bookings.filter(b => b.booking_date === targetDate);
-  if (bookings.length === 0) { showToast(`Nenhum agendamento para ${day === 'today' ? 'hoje' : 'amanhã'}!`, 'error'); return; }
+  if (bookings.length === 0) {
+    showToast(`Nenhum agendamento para ${day === 'today' ? 'hoje' : 'amanhã'}!`, 'error');
+    return;
+  }
   const label = day === 'today' ? 'hoje' : 'amanhã';
-  if (!confirm(`Enviar confirmação para ${bookings.length} cliente(s) de ${label}? Serão abertas ${bookings.length} janela(s) do WhatsApp.`)) return;
-  let delay = 0;
-  bookings.forEach(b => {
-    setTimeout(() => {
-      const msg = buildConfirmMsg(b);
-      const wa = b.client_whatsapp.replace(/\D/g, '');
-      openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
-    }, delay);
-    delay += 800;
-  });
-  showToast(`Enviando para ${bookings.length} cliente(s)...`, 'success');
+  if (!confirm(`Enviar confirmação para ${bookings.length} cliente(s) de ${label}?\n\nVocê vai enviar um por vez — clique em PRÓXIMO após cada envio.`)) return;
+  _bulkQueue = bookings;
+  _bulkIndex = 0;
+  _showBulkModal();
+}
+
+function _showBulkModal() {
+  if (_bulkIndex >= _bulkQueue.length) {
+    closeModal('modal-bulk-wa');
+    showToast('✅ Confirmações enviadas para todos os clientes!', 'success');
+    return;
+  }
+  const b = _bulkQueue[_bulkIndex];
+  const br = getBarber(b.barber_id);
+  const sv = getService(b.service_id);
+  const wa = b.client_whatsapp.replace(/\D/g, '');
+  const total = _bulkQueue.length;
+  const atual = _bulkIndex + 1;
+
+  document.getElementById('bulk-progress').textContent = atual + ' de ' + total;
+  document.getElementById('bulk-client-name').textContent = b.client_name;
+  document.getElementById('bulk-client-wa').textContent = b.client_whatsapp;
+  document.getElementById('bulk-client-info').textContent =
+    (sv ? sv.name : '') + ' · ' + (br ? br.name : '') + ' · ' + formatDate(b.booking_date) + ' às ' + b.booking_time;
+
+  const msg = buildConfirmMsg(b);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const waUrl = isMobile
+    ? 'whatsapp://send?phone=55' + wa + '&text=' + msg
+    : 'https://api.whatsapp.com/send?phone=55' + wa + '&text=' + msg;
+
+  document.getElementById('btn-bulk-send').onclick = function() { window.open(waUrl, '_blank'); };
+  document.getElementById('btn-bulk-next').onclick = function() { _bulkIndex++; _showBulkModal(); };
+  document.getElementById('bulk-progress-bar').style.width = ((atual / total) * 100) + '%';
+
+  openModal('modal-bulk-wa');
 }
 
 // =====================================================
@@ -2535,6 +2643,7 @@ window.selectDate          = selectDate;
 window.selectRescheduleDate= selectRescheduleDate;
 window.selectRescheduleTime= selectRescheduleTime;
 window.sendBulkWhatsApp    = sendBulkWhatsApp;
+window._showBulkModal       = _showBulkModal;
 window.sendIndividualConfirm = sendIndividualConfirm;
 window.sendReminder        = sendReminder;
 window.sendWhatsAppConfirm = sendWhatsAppConfirm;
