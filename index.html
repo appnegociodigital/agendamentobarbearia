@@ -6,6 +6,7 @@
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-Frame-Options" content="DENY">
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://api.whatsapp.com https://api.mercadopago.com;">
 <title>Barber System</title>
 <script>
 // Força HTTPS — redireciona se acessado via HTTP (exceto localhost)
@@ -1233,6 +1234,40 @@ CREATE TABLE IF NOT EXISTS barber_blocks (
 -- Para alterar o telefone/login:
 -- UPDATE barbershops SET email = '85986717530' WHERE role = 'admin';
 
+-- ============================================================
+-- SEGURANCA: Row Level Security (RLS)
+-- Execute APOS criar as tabelas para proteger os dados.
+-- Com RLS ativo, o anon key so consegue ler/escrever o
+-- que as policies permitem — mesmo que alguem copie o key.
+-- ============================================================
+
+-- Habilita RLS em todas as tabelas
+ALTER TABLE barbershops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE barbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE barber_blocks ENABLE ROW LEVEL SECURITY;
+
+-- Politica: qualquer um pode ler barbearias ativas (necessario para tela publica do cliente)
+CREATE POLICY "public_read_active_shops" ON barbershops
+  FOR SELECT USING (status = 'active');
+
+-- Politica: qualquer um pode ler barbeiros/servicos/bloqueios (tela publica)
+CREATE POLICY "public_read_barbers"  ON barbers        FOR SELECT USING (true);
+CREATE POLICY "public_read_services" ON services       FOR SELECT USING (true);
+CREATE POLICY "public_read_blocks"   ON barber_blocks  FOR SELECT USING (true);
+
+-- Politica: qualquer um pode inserir agendamentos (cliente agendando)
+CREATE POLICY "public_insert_bookings" ON bookings FOR INSERT WITH CHECK (true);
+
+-- Politica: qualquer um pode ler agendamentos (verificar horarios ocupados)
+CREATE POLICY "public_read_bookings" ON bookings FOR SELECT USING (true);
+
+-- NOTA: Updates/Deletes sensiveis (status de barbearia, senha, token MP)
+-- devem ser feitos APENAS pelas Edge Functions com service_role key,
+-- que ignoram RLS. O anon key do frontend nao consegue alterar esses dados.
+-- ============================================================
+
 -- ADICIONE A COLUNA address SE NAO EXISTIR (execute se necessario):
 -- ALTER TABLE barbershops ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
 
@@ -1439,8 +1474,9 @@ async function doLogin() {
 }
 
 function doLogout() {
+  _clearSession();
   currentUser = null; currentShop = null;
-  state = { barbers: [], services: [], bookings: [] };
+  state = { barbers: [], services: [], bookings: [], blocks: [] };
   showScreen('login-screen');
   _checkBiometricAvailable();
 }
@@ -1582,8 +1618,56 @@ function _b64ToBuffer(b64url) {
   return buf;
 }
 
+// =====================================================
+//  SESSAO COM EXPIRACAO (8 horas)
+// =====================================================
+const _SESSION_KEY  = 'barber_session';
+const _SESSION_TTL  = 8 * 60 * 60 * 1000;
+let   _sessionTimer = null;
+
+function _saveSession(data) {
+  try {
+    sessionStorage.setItem(_SESSION_KEY, JSON.stringify({
+      shop: data,
+      expiresAt: Date.now() + _SESSION_TTL
+    }));
+  } catch(e) {}
+}
+
+function _loadSession() {
+  try {
+    const raw = sessionStorage.getItem(_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.expiresAt || Date.now() > parsed.expiresAt) {
+      sessionStorage.removeItem(_SESSION_KEY);
+      return null;
+    }
+    return parsed.shop;
+  } catch(e) { return null; }
+}
+
+function _clearSession() {
+  sessionStorage.removeItem(_SESSION_KEY);
+  if (_sessionTimer) { clearTimeout(_sessionTimer); _sessionTimer = null; }
+}
+
+function _startSessionTimer(expiresIn) {
+  if (_sessionTimer) clearTimeout(_sessionTimer);
+  _sessionTimer = setTimeout(() => {
+    _clearSession();
+    currentUser = null; currentShop = null;
+    state = { barbers: [], services: [], bookings: [], blocks: [] };
+    showScreen('login-screen');
+    _checkBiometricAvailable();
+    showToast('Sessao expirada. Faca login novamente.', 'error');
+  }, expiresIn);
+}
+
 function _enterSystem(data) {
   currentShop = data;
+  _saveSession(data);
+  _startSessionTimer(_SESSION_TTL);
   if (data.role === 'admin') {
     showScreen('admin-screen');
     document.getElementById('admin-user-name').textContent = data.name;
@@ -1961,8 +2045,9 @@ function sendReminder(bookingId) {
 // =====================================================
 function renderClienteTab() {
   const slug = currentShop?.slug || 'barbearia';
-  // URL fixa do GitHub Pages — garante link correto independente de onde o sistema é acessado
-  const base = 'https://appnegociodigital.github.io/index.html';
+  // Usa a URL real do navegador (funciona igual ao botão Testar)
+  // Remove /index.html do final se existir — GitHub Pages não usa index.html na URL
+  const base = (window.location.origin + window.location.pathname).replace(/\/index\.html$/, '/');
   const link = `${base}?b=${slug}`;
   document.getElementById('booking-link').textContent = link;
   loadDepositConfig();
@@ -2027,13 +2112,31 @@ async function saveUser() {
   const email = document.getElementById('user-email-input').value.replace(/[^0-9]/g,'');
   const pass = document.getElementById('user-pass-input').value.trim();
   const mpToken = document.getElementById('user-mp-token-input').value.trim();
-  if (!name || !slug || !email || !pass) { showToast('Preencha todos os campos obrigatórios!', 'error'); return; }
+  if (!name || !slug || !email || !pass) { showToast('Preencha todos os campos obrigatorios!', 'error'); return; }
+  if (pass.length < 4) { showToast('Senha deve ter 4 digitos!', 'error'); return; }
+  if (!/^[0-9]{4}$/.test(pass)) { showToast('Senha deve conter apenas 4 numeros!', 'error'); return; }
   showLoading(true);
-  const newShop = { name, slug, email, password_hash: pass, role: 'user', status: 'active' };
-  if (mpToken) newShop.mp_token = mpToken;
-  const { error } = await db.from('barbershops').insert(newShop);
+  try {
+    // Cria barbearia via Edge Function (service_role, bypassa RLS)
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({ name, slug, email, password: pass, mp_token: mpToken || null })
+    });
+    if (!resp.ok) {
+      // Fallback direto (requer RLS permissiva)
+      const newShop = { name, slug, email, password_hash: pass, role: 'user', status: 'active' };
+      if (mpToken) newShop.mp_token = mpToken;
+      const { error } = await db.from('barbershops').insert(newShop);
+      if (error) { showLoading(false); showToast(error.message.includes('unique') ? 'Telefone ou slug ja em uso!' : 'Erro ao salvar!', 'error'); return; }
+    }
+  } catch(e) {
+    const newShop = { name, slug, email, password_hash: pass, role: 'user', status: 'active' };
+    if (mpToken) newShop.mp_token = mpToken;
+    const { error } = await db.from('barbershops').insert(newShop);
+    if (error) { showLoading(false); showToast(error.message.includes('unique') ? 'Telefone ou slug ja em uso!' : 'Erro ao salvar!', 'error'); return; }
+  }
   showLoading(false);
-  if (error) { showToast(error.message.includes('unique') ? 'Telefone ou slug já em uso!' : 'Erro ao salvar!', 'error'); return; }
   closeModal('modal-add-user');
   document.getElementById('user-name-input').value = '';
   document.getElementById('user-slug-input').value = '';
@@ -2418,17 +2521,36 @@ async function saveMpToken() {
   if (!currentShop) return;
   const token = document.getElementById('shop-mp-token-input').value.trim();
   const status = document.getElementById('mp-token-status');
-  if (!token) { status.textContent = '❌ Cole o token antes de salvar.'; status.style.color = 'red'; return; }
-  showLoading(true);
-  const { error } = await db.from('barbershops').update({ mp_token: token }).eq('id', currentShop.id);
-  showLoading(false);
-  if (error) {
-    status.textContent = '❌ Erro ao salvar token.'; status.style.color = 'red';
-  } else {
-    currentShop.mp_token = token;
-    status.textContent = '✅ Token salvo com sucesso!'; status.style.color = '#4CAF50';
-    setTimeout(() => status.textContent = '', 3000);
+  if (!token) { status.textContent = 'Cole o token antes de salvar.'; status.style.color = 'red'; return; }
+  // Valida formato basico do token Mercado Pago (APP_USR- ou TEST-)
+  if (!/^(APP_USR-|TEST-)/.test(token)) {
+    status.textContent = 'Token invalido. Deve comecar com APP_USR- ou TEST-';
+    status.style.color = 'red'; return;
   }
+  showLoading(true);
+  try {
+    // Salva via Edge Function para nao expor token no cliente
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({ id: currentShop.id, updates: { mp_token: token } })
+    });
+    if (!resp.ok) {
+      // Fallback direto
+      const { error } = await db.from('barbershops').update({ mp_token: token }).eq('id', currentShop.id);
+      if (error) { showLoading(false); status.textContent = 'Erro ao salvar token.'; status.style.color = 'red'; return; }
+    }
+  } catch(e) {
+    const { error } = await db.from('barbershops').update({ mp_token: token }).eq('id', currentShop.id);
+    if (error) { showLoading(false); status.textContent = 'Erro ao salvar token.'; status.style.color = 'red'; return; }
+  }
+  showLoading(false);
+  // Marca que token existe mas NAO guarda o valor em memoria
+  currentShop.mp_token = true;
+  document.getElementById('shop-mp-token-input').value = '';
+  document.getElementById('shop-mp-token-input').placeholder = 'Token configurado (cole novo para substituir)';
+  status.textContent = 'Token salvo com sucesso!'; status.style.color = '#4CAF50';
+  setTimeout(() => status.textContent = '', 3000);
 }
 
 // =====================================================
@@ -2859,22 +2981,49 @@ function _showBulkModal() {
 })();
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Garante que nenhuma tela fica visível durante o carregamento
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  // Mostra o loading enquanto carrega
   showLoading(true);
   initSupabase();
   const slug = getSlugFromUrl();
   if (slug) {
-    // Mantém tudo oculto até carregar dados do cliente
     await initClientScreen(slug);
   } else {
+    // Tenta restaurar sessao valida (evita login repetido dentro das 8h)
+    const savedSession = _loadSession();
+    if (savedSession) {
+      showLoading(false);
+      document.documentElement.style.visibility = '';
+      const expiresAt = JSON.parse(sessionStorage.getItem(_SESSION_KEY) || '{}').expiresAt || 0;
+      const remaining = expiresAt - Date.now();
+      if (remaining > 0) {
+        _startSessionTimer(remaining);
+        _enterSystemRestored(savedSession);
+        return;
+      }
+    }
     showLoading(false);
     document.documentElement.style.visibility = '';
     showScreen('login-screen');
     _checkBiometricAvailable();
   }
 });
+
+// Restaura sessao sem regravar no sessionStorage (ja esta salvo)
+function _enterSystemRestored(data) {
+  currentShop = data;
+  if (data.role === 'admin') {
+    showScreen('admin-screen');
+    document.getElementById('admin-user-name').textContent = data.name;
+    renderAdminUsers();
+  } else {
+    loadState().then(() => {
+      showScreen('user-screen');
+      document.getElementById('user-name-display').textContent = data.name;
+      document.getElementById('shop-topbar-name').textContent = data.name.toUpperCase().substring(0,12);
+      initUserApp();
+    });
+  }
+}
 
 // =====================================================
 //  FORMATACAO DE TELEFONE
@@ -3040,7 +3189,8 @@ window.editBarber          = editBarber;
 window.editService         = editService;
 window.editUser            = editUser;
 window.gerarPixPagamento   = gerarPixPagamento;
-window.instalarApp         = instalarApp;
+window.instalarApp           = instalarApp;
+window._enterSystemRestored  = _enterSystemRestored;
 window.openBarberModal     = openBarberModal;
 window.openBlockModal      = openBlockModal;
 window.openBookingDetail   = openBookingDetail;
@@ -3084,7 +3234,8 @@ window.saveDepositConfig   = saveDepositConfig;
 window.copyPixKey          = copyPixKey;
 window.renderClientsTab    = renderClientsTab;
 window.changeShopPassword  = changeShopPassword;
-window.instalarApp         = instalarApp;
+window.instalarApp           = instalarApp;
+window._enterSystemRestored  = _enterSystemRestored;
 </script>
 </body>
 </html>
