@@ -3350,8 +3350,7 @@ async function saveWabaConfig() {
 async function testWabaConfig() {
   if (!currentShop || !currentShop.waba_configured) return;
   const status = document.getElementById('waba-config-status');
-  const testPhone = prompt('Digite o numero WhatsApp para teste (com DDI, somente numeros):
-Ex: 5585999990000');
+  const testPhone = prompt('Digite o numero WhatsApp para teste (com DDI, somente numeros):\nEx: 5585999990000');
   if (!testPhone || testPhone.replace(/\D/g,'').length < 11) { showToast('Numero invalido!', 'error'); return; }
   showLoading(true);
   try {
