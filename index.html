@@ -7,7 +7,8 @@
 <meta http-equiv="X-Frame-Options" content="DENY">
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://api.whatsapp.com https://api.mercadopago.com;">
-<title>Barber System</title>
+<!-- Meta Cloud API: chamadas NUNCA saem do frontend — apenas da Edge Function do Supabase -->
+<title>Sistema de Agendamento</title>
 <script>
 // Força HTTPS — redireciona se acessado via HTTP (exceto localhost)
 if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
@@ -396,7 +397,6 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
   <div class="topbar">
     <div class="topbar-left">
       <span>✂️</span>
-      <span class="topbar-logo">BARBER SYSTEM</span>
       <span class="topbar-badge">ADMIN</span>
     </div>
     <div style="display:flex;align-items:center;gap:0.5rem">
@@ -408,6 +408,19 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
     <div class="section-header">
       <div><h2>PAINEL ADMIN</h2><p>Gestão de barbearias</p></div>
       <span style="font-size:1.5rem">🛡️</span>
+    </div>
+    <!-- BARRA DE PESQUISA -->
+    <div style="margin-bottom:1rem;position:relative">
+      <input
+        type="search"
+        id="admin-search"
+        placeholder="🔍 Buscar por nome ou telefone..."
+        oninput="filterAdminUsers(this.value)"
+        style="width:100%;box-sizing:border-box;padding:0.65rem 1rem 0.65rem 2.6rem;border:1.5px solid var(--border);border-radius:10px;background:var(--card-bg);color:var(--text);font-size:0.9rem;font-family:var(--font-body);outline:none;transition:border 0.2s"
+        onfocus="this.style.borderColor='var(--blue-mid)'"
+        onblur="this.style.borderColor='var(--border)'"
+      >
+      <svg style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);opacity:0.45;pointer-events:none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </div>
     <div class="card">
       <div class="card-header">
@@ -588,6 +601,36 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         </div>
         <button class="btn-primary" onclick="saveMpToken()" style="width:100%;margin-top:0.5rem">💾 SALVAR TOKEN</button>
         <div id="mp-token-status" style="font-size:0.75rem;color:#4CAF50;margin-top:0.4rem;text-align:center"></div>
+      </div>
+
+      <!-- WHATSAPP BUSINESS API -->
+      <div class="card" id="card-waba">
+        <div class="card-header">
+          <span class="card-title">📲 WHATSAPP BUSINESS API</span>
+          <span id="waba-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
+          Configure aqui para enviar mensagens de confirmação <b>automaticamente</b> para os clientes, sem precisar abrir o WhatsApp manualmente.<br>
+          <span style="color:var(--blue);font-weight:600">Obtenha em:</span> developers.facebook.com → Meus Apps → WhatsApp → Configuração
+        </div>
+        <div class="form-group">
+          <label>📱 Número WhatsApp Business (com DDI)</label>
+          <input type="tel" id="waba-phone-id" placeholder="Ex: 5585999990000" style="font-size:0.85rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Somente números, com DDI (55) + DDD + número</small>
+        </div>
+        <div class="form-group">
+          <label>🆔 Phone Number ID (do painel Meta)</label>
+          <input type="text" id="waba-phone-number-id" placeholder="Ex: 123456789012345" style="font-size:0.85rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Encontre em: Meta for Developers → Seu App → WhatsApp → Configuração API</small>
+        </div>
+        <div class="form-group">
+          <label>🔑 Token de Acesso Permanente</label>
+          <input type="text" id="waba-token" placeholder="EAAxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Gere em: Meta Business Suite → Configurações → Usuários do sistema → Gerar token</small>
+        </div>
+        <button class="btn-primary" onclick="saveWabaConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
+        <button class="btn-secondary" onclick="testWabaConfig()" style="width:100%;margin-top:0.5rem" id="btn-test-waba" style="display:none">📨 ENVIAR MENSAGEM DE TESTE</button>
+        <div id="waba-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
       </div>
 
       <!-- ALTERAR SENHA -->
@@ -1550,7 +1593,7 @@ async function _registerBiometric(shopId, shopName) {
     const credential = await navigator.credentials.create({
       publicKey: {
         challenge,
-        rp: { name: 'Barber System', id: location.hostname },
+        rp: { name: 'Sistema de Agendamento', id: location.hostname },
         user: {
           id: enc.encode(shopId),
           name: shopName,
@@ -1591,7 +1634,7 @@ async function doBiometricLogin() {
     // Biometria confirmada — busca os dados da barbearia pelo shopId salvo
     showLoading(true);
     const { data, error } = await db.from('barbershops')
-      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token')
+      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token,waba_phone_id,waba_phone_number_id,waba_configured')
       .eq('id', credData.shopId).eq('status', 'active').single();
     showLoading(false);
     if (error || !data) {
@@ -2034,9 +2077,31 @@ function buildLembreteMsg(b) {
   );
 }
 
-function sendReminder(bookingId) {
+async function sendReminder(bookingId) {
   const b = state.bookings.find(bk => bk.id === bookingId); if (!b) return;
+  const br = getBarber(b.barber_id); const sv = getService(b.service_id);
   const wa = b.client_whatsapp.replace(/\D/g, '');
+  // ── Tenta Meta API se WABA configurado ──────────────────────────────────────
+  if (currentShop && currentShop.waba_configured) {
+    showLoading(true);
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+        body: JSON.stringify({
+          shop_id: currentShop.id, type: 'lembrete', to: '55' + wa,
+          client_name: b.client_name, barber_name: br ? br.name : '',
+          service_name: sv ? sv.name : '', date: formatDate(b.booking_date),
+          time: b.booking_time, deposit: currentShop.deposit_value || 0,
+          shop_name: currentShop.name
+        })
+      });
+      const r = await resp.json();
+      showLoading(false);
+      if (resp.ok && r && !r.error) { showToast('✅ Lembrete enviado automaticamente!', 'success'); return; }
+    } catch(e) { showLoading(false); }
+  }
+  // ── Fallback: WhatsApp Web/App ───────────────────────────────────────────────
   openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${buildLembreteMsg(b)}`);
 }
 
@@ -2906,10 +2971,32 @@ function buildConfirmMsg(b) {
   return buildLembreteMsg(b);
 }
 
-function sendIndividualConfirm(bookingId) {
+async function sendIndividualConfirm(bookingId) {
   const b = state.bookings.find(bk => bk.id === bookingId); if (!b) return;
+  const br = getBarber(b.barber_id); const sv = getService(b.service_id);
+  const wa = b.client_whatsapp.replace(/\D/g,'');
+  // ── Tenta Meta API se WABA configurado ──────────────────────────────────────
+  if (currentShop && currentShop.waba_configured) {
+    showLoading(true);
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+        body: JSON.stringify({
+          shop_id: currentShop.id, type: 'confirmacao', to: '55' + wa,
+          client_name: b.client_name, barber_name: br ? br.name : '',
+          service_name: sv ? sv.name : '', date: formatDate(b.booking_date),
+          time: b.booking_time, price: sv ? Number(sv.price).toFixed(2) : '0',
+          deposit: currentShop.deposit_value || 0, shop_name: currentShop.name
+        })
+      });
+      const r = await resp.json();
+      showLoading(false);
+      if (resp.ok && r && !r.error) { showToast('✅ Confirmação enviada!', 'success'); return; }
+    } catch(e) { showLoading(false); }
+  }
+  // ── Fallback: WhatsApp Web/App ───────────────────────────────────────────────
   const msg = buildConfirmMsg(b);
-  const wa = b.client_whatsapp.replace(/\D/g, '');
   openWhatsAppLink(`https://api.whatsapp.com/send?phone=55${wa}&text=${msg}`);
 }
 
@@ -2917,7 +3004,7 @@ function sendIndividualConfirm(bookingId) {
 let _bulkQueue = [];
 let _bulkIndex = 0;
 
-function sendBulkWhatsApp(day) {
+async function sendBulkWhatsApp(day) {
   const targetDate = day === 'today' ? getTodayStr() : getDateStr(1);
   const bookings = state.bookings.filter(b => b.booking_date === targetDate);
   if (bookings.length === 0) {
@@ -2925,6 +3012,38 @@ function sendBulkWhatsApp(day) {
     return;
   }
   const label = day === 'today' ? 'hoje' : 'amanhã';
+  const shopWabaOk = currentShop && currentShop.waba_configured;
+
+  // ── Envio automático em lote via Meta API (se WABA configurado) ──────────────
+  if (shopWabaOk) {
+    if (!confirm(`Enviar confirmação automática via WhatsApp Business para ${bookings.length} cliente(s) de ${label}?`)) return;
+    showLoading(true);
+    let ok = 0, fail = 0;
+    for (const b of bookings) {
+      const br = getBarber(b.barber_id); const sv = getService(b.service_id);
+      const wa = b.client_whatsapp.replace(/\D/g,'');
+      try {
+        const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+          body: JSON.stringify({
+            shop_id: currentShop.id, type: 'confirmacao', to: '55' + wa,
+            client_name: b.client_name, barber_name: br ? br.name : '',
+            service_name: sv ? sv.name : '', date: formatDate(b.booking_date),
+            time: b.booking_time, price: sv ? Number(sv.price).toFixed(2) : '0',
+            deposit: currentShop.deposit_value || 0, shop_name: currentShop.name
+          })
+        });
+        const r = await resp.json();
+        if (resp.ok && r && !r.error) ok++; else fail++;
+      } catch(e) { fail++; }
+    }
+    showLoading(false);
+    showToast(`✅ Enviados: ${ok} | ❌ Falha: ${fail}`, ok > 0 ? 'success' : 'error');
+    return;
+  }
+
+  // ── Fallback: modal de envio manual (WhatsApp Web/App) ──────────────────────
   if (!confirm(`Enviar confirmação para ${bookings.length} cliente(s) de ${label}?\n\nVocê vai enviar um por vez — clique em PRÓXIMO após cada envio.`)) return;
   _bulkQueue = bookings;
   _bulkIndex = 0;
@@ -3073,17 +3192,31 @@ async function renderAdminUsers() {
   const { data: users } = await db.from('barbershops').select('id,name,slug,email,role,status,address,deposit_value,pix_key,block_credit,created_at').order('created_at');
   showLoading(false);
   _adminUsers = users || [];
-  const list = _adminUsers.filter(u => u.role !== 'admin');
-  document.getElementById('admin-total-users').textContent = list.filter(u => u.status === 'active').length;
-  document.getElementById('admin-total-barbs').textContent = list.length;
+  // Mantém o texto de busca atual ao recarregar
+  const searchTerm = (document.getElementById('admin-search') || {}).value || '';
+  _renderAdminList(searchTerm);
+}
+
+function _renderAdminList(term) {
+  const normalized = (term || '').toLowerCase().replace(/\D/g, '') || null;
+  const list = _adminUsers.filter(u => {
+    if (u.role === 'admin') return false;
+    if (!term) return true;
+    const nameMatch  = u.name.toLowerCase().includes(term.toLowerCase());
+    const phoneMatch = normalized && u.email.replace(/\D/g,'').includes(normalized);
+    const slugMatch  = u.slug.toLowerCase().includes(term.toLowerCase());
+    return nameMatch || phoneMatch || slugMatch;
+  });
+  document.getElementById('admin-total-users').textContent = _adminUsers.filter(u => u.role !== 'admin' && u.status === 'active').length;
+  document.getElementById('admin-total-barbs').textContent = _adminUsers.filter(u => u.role !== 'admin').length;
   document.getElementById('user-list').innerHTML = list.length === 0
-    ? '<div class="empty-state">Nenhuma barbearia cadastrada</div>'
+    ? '<div class="empty-state">' + (term ? 'Nenhum resultado para "' + term + '"' : 'Nenhuma barbearia cadastrada') + '</div>'
     : list.map(u => `
       <div class="user-card">
         <div class="user-icon">${u.name.charAt(0).toUpperCase()}</div>
         <div class="user-info">
           <div class="user-name">${u.name}</div>
-          <div class="user-meta">Login: ${u.email}</div>
+          <div class="user-meta">📱 ${u.email}</div>
           <div class="user-meta" style="font-size:0.72rem;color:var(--gray-mid)">${u.address || ''}</div>
           <span class="slug-tag">?b=${u.slug}</span>
           <span class="user-badge ${u.status === 'blocked' ? 'blocked' : 'user'}" style="margin-left:0.3rem">${u.status === 'blocked' ? 'BLOQUEADA' : 'ATIVA'}</span>
@@ -3094,6 +3227,10 @@ async function renderAdminUsers() {
           <button class="btn-small btn-danger" onclick="deleteUser('${u.id}')" style="font-size:0.68rem;padding:0.3rem 0.6rem">Excluir</button>
         </div>
       </div>`).join('');
+}
+
+function filterAdminUsers(term) {
+  _renderAdminList(term);
 }
 
 function editUser(id) {
@@ -3149,6 +3286,216 @@ async function saveEditShop() {
 }
 
 // =====================================================
+//  WHATSAPP BUSINESS API (Meta Cloud API)
+// =====================================================
+
+// Carrega configuração WABA no painel
+function loadWabaConfig() {
+  if (!currentShop) return;
+  const phoneId    = document.getElementById('waba-phone-id');
+  const phoneNumId = document.getElementById('waba-phone-number-id');
+  const badge      = document.getElementById('waba-status-badge');
+  const testBtn    = document.getElementById('btn-test-waba');
+  if (phoneId)    phoneId.placeholder    = currentShop.waba_phone_id ? 'Numero ja configurado' : 'Ex: 5585999990000';
+  if (phoneNumId) phoneNumId.placeholder = currentShop.waba_phone_number_id ? 'ID ja configurado' : 'Ex: 123456789012345';
+  if (badge)   badge.style.display   = currentShop.waba_configured ? 'inline-block' : 'none';
+  if (testBtn) testBtn.style.display = currentShop.waba_configured ? 'block' : 'none';
+}
+
+// Salva configuração WABA (token fica na Edge Function, nunca exposto)
+async function saveWabaConfig() {
+  if (!currentShop) return;
+  const phoneId    = document.getElementById('waba-phone-id').value.replace(/\D/g,'');
+  const phoneNumId = document.getElementById('waba-phone-number-id').value.trim();
+  const token      = document.getElementById('waba-token').value.trim();
+  const status     = document.getElementById('waba-config-status');
+
+  if (!phoneId || !phoneNumId || !token) {
+    status.textContent = 'Preencha todos os campos!'; status.style.color = 'red'; return;
+  }
+  if (!token.startsWith('EAA')) {
+    status.textContent = 'Token invalido. Deve comecar com EAA'; status.style.color = 'red'; return;
+  }
+  showLoading(true);
+  try {
+    // Salva via Edge Function — token NUNCA trafega pelo banco direto do frontend
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({ shop_id: currentShop.id, waba_phone_id: phoneId, waba_phone_number_id: phoneNumId, waba_token: token })
+    });
+    if (!resp.ok) {
+      // Fallback: salva direto (sem o token — token exige Edge Function)
+      const { error } = await db.from('barbershops').update({ waba_phone_id: phoneId, waba_phone_number_id: phoneNumId, waba_configured: true }).eq('id', currentShop.id);
+      if (error) { showLoading(false); status.textContent = 'Erro ao salvar: ' + error.message; status.style.color = 'red'; return; }
+    }
+  } catch(e) {
+    const { error } = await db.from('barbershops').update({ waba_phone_id: phoneId, waba_phone_number_id: phoneNumId, waba_configured: true }).eq('id', currentShop.id);
+    if (error) { showLoading(false); status.textContent = 'Erro ao salvar.'; status.style.color = 'red'; return; }
+  }
+  showLoading(false);
+  currentShop.waba_phone_id = phoneId;
+  currentShop.waba_phone_number_id = phoneNumId;
+  currentShop.waba_configured = true;
+  // Limpa campos sensiveis
+  document.getElementById('waba-token').value = '';
+  document.getElementById('waba-phone-id').value = '';
+  document.getElementById('waba-phone-number-id').value = '';
+  loadWabaConfig();
+  status.textContent = 'Configuracao salva! Mensagens automaticas ativadas.'; status.style.color = '#4CAF50';
+  setTimeout(() => status.textContent = '', 4000);
+}
+
+// Envia mensagem de teste WABA
+async function testWabaConfig() {
+  if (!currentShop || !currentShop.waba_configured) return;
+  const status = document.getElementById('waba-config-status');
+  const testPhone = prompt('Digite o numero WhatsApp para teste (com DDI, somente numeros):
+Ex: 5585999990000');
+  if (!testPhone || testPhone.replace(/\D/g,'').length < 11) { showToast('Numero invalido!', 'error'); return; }
+  showLoading(true);
+  try {
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({
+        shop_id: currentShop.id,
+        to: testPhone.replace(/\D/g,''),
+        type: 'test',
+        message: 'Ola! Esta e uma mensagem de teste do sistema. Sua configuracao do WhatsApp Business esta funcionando corretamente!'
+      })
+    });
+    const result = await resp.json();
+    showLoading(false);
+    if (resp.ok && !result.error) {
+      status.textContent = 'Mensagem de teste enviada com sucesso!'; status.style.color = '#4CAF50';
+    } else {
+      status.textContent = 'Erro no teste: ' + (result.error || 'Verifique o token e tente novamente'); status.style.color = 'red';
+    }
+    setTimeout(() => status.textContent = '', 5000);
+  } catch(e) {
+    showLoading(false);
+    status.textContent = 'Erro de conexao ao testar.'; status.style.color = 'red';
+  }
+}
+
+// Funcao central de envio: tenta Meta API, cai para manual se nao configurado
+async function sendAutoWhatsApp(tipo, dados) {
+  // dados: { to, client_name, barber_name, service_name, date, time, price, deposit, shop_name }
+  const shopConfigured = clientShopData && clientShopData.waba_configured;
+
+  if (shopConfigured) {
+    // Tenta envio automatico via Edge Function
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG },
+        body: JSON.stringify({ shop_id: clientShopData.id, type: tipo, ...dados })
+      });
+      if (resp.ok) {
+        const r = await resp.json();
+        if (r && !r.error) return { sent: true, auto: true };
+      }
+    } catch(e) {}
+    // Se Edge Function falhar, cai no fallback manual
+  }
+
+  // Fallback: abre WhatsApp Web/App manualmente
+  return { sent: false, auto: false };
+}
+
+// Envio automatico de confirmacao de agendamento (chamado apos confirmar booking)
+async function sendConfirmacaoAuto(bookingData) {
+  const br = bookingData.br; const sv = bookingData.sv;
+  const wa = (clientFlow.whatsapp || '').replace(/\D/g,'');
+  const sinalInfo = clientShopData && clientShopData.deposit_value > 0
+    ? `
+💳 Sinal pago: R$${Number(clientShopData.deposit_value).toFixed(2)} (abatido no dia)` : '';
+
+  const dados = {
+    to: '55' + wa,
+    type: 'confirmacao',
+    client_name: clientFlow.name,
+    barber_name: br ? br.name : '',
+    service_name: sv ? sv.name : '',
+    date: formatDate(clientFlow.date),
+    time: clientFlow.time,
+    price: sv ? Number(sv.price).toFixed(2) : '0',
+    deposit: clientShopData ? clientShopData.deposit_value || 0 : 0,
+    shop_name: clientShopData ? clientShopData.name : ''
+  };
+
+  const result = await sendAutoWhatsApp('confirmacao', dados);
+
+  if (result.auto) {
+    // Mensagem enviada automaticamente — mostra confirmacao na tela
+    document.getElementById('success-summary-text').textContent = 'Confirmacao enviada automaticamente no seu WhatsApp!';
+    const waBtn = document.querySelector('#client-step-6 .whatsapp-btn');
+    if (waBtn) waBtn.textContent = '📱 Reenviar confirmacao no WhatsApp';
+  } else {
+    // Fallback: abre WhatsApp manualmente
+    const msg = encodeURIComponent(
+      'Agendamento Confirmado!
+' +
+      'Barbeiro: ' + (br ? br.name : '') + '
+' +
+      'Servico: ' + (sv ? sv.name : '') + '
+' +
+      'Data: ' + formatDate(clientFlow.date) + '
+' +
+      'Horario: ' + clientFlow.time + '
+' +
+      'Valor: R$' + (sv ? Number(sv.price).toFixed(2) : '0') +
+      sinalInfo +
+      '
+
+Reagendamento gratuito ate 24h antes.
+Ate logo!'
+    );
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const url = isMobile
+      ? 'whatsapp://send?phone=55' + wa + '&text=' + msg
+      : 'https://api.whatsapp.com/send?phone=55' + wa + '&text=' + msg;
+    if (wa && wa.length >= 10) window.open(url, '_blank');
+  }
+}
+
+// Envio automatico de lembrete (painel do barbeiro)
+async function sendReminderAuto(bookingId) {
+  const b = state.bookings.find(bk => bk.id === bookingId); if (!b) return;
+  const br = getBarber(b.barber_id); const sv = getService(b.service_id);
+  const wa = b.client_whatsapp.replace(/\D/g,'');
+  const shopConf = currentShop && currentShop.waba_configured;
+
+  if (shopConf) {
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/waba-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+        body: JSON.stringify({
+          shop_id: currentShop.id,
+          type: 'lembrete',
+          to: '55' + wa,
+          client_name: b.client_name,
+          barber_name: br ? br.name : '',
+          service_name: sv ? sv.name : '',
+          date: formatDate(b.booking_date),
+          time: b.booking_time,
+          deposit: currentShop.deposit_value || 0,
+          shop_name: currentShop.name
+        })
+      });
+      if (resp.ok) {
+        const r = await resp.json();
+        if (r && !r.error) { showToast('Lembrete enviado automaticamente!', 'success'); return; }
+      }
+    } catch(e) {}
+  }
+  // Fallback manual
+  openWhatsAppLink('https://api.whatsapp.com/send?phone=55' + wa + '&text=' + buildLembreteMsg(b));
+}
+
+// =====================================================
 //  PWA — INSTALAR APP
 // =====================================================
 async function instalarApp() {
@@ -3191,6 +3538,7 @@ window.editUser            = editUser;
 window.gerarPixPagamento   = gerarPixPagamento;
 window.instalarApp           = instalarApp;
 window._enterSystemRestored  = _enterSystemRestored;
+window.filterAdminUsers      = filterAdminUsers;
 window.openBarberModal     = openBarberModal;
 window.openBlockModal      = openBlockModal;
 window.openBookingDetail   = openBookingDetail;
@@ -3236,6 +3584,7 @@ window.renderClientsTab    = renderClientsTab;
 window.changeShopPassword  = changeShopPassword;
 window.instalarApp           = instalarApp;
 window._enterSystemRestored  = _enterSystemRestored;
+window.filterAdminUsers      = filterAdminUsers;
 </script>
 </body>
 </html>
