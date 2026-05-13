@@ -1634,7 +1634,7 @@ async function doBiometricLogin() {
     // Biometria confirmada — busca os dados da barbearia pelo shopId salvo
     showLoading(true);
     const { data, error } = await db.from('barbershops')
-      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,mp_token,waba_phone_id,waba_phone_number_id,waba_configured')
+      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,waba_phone_id,waba_phone_number_id,waba_configured')
       .eq('id', credData.shopId).eq('status', 'active').single();
     showLoading(false);
     if (error || !data) {
@@ -2189,17 +2189,15 @@ async function saveUser() {
       body: JSON.stringify({ name, slug, email, password: pass, mp_token: mpToken || null })
     });
     if (!resp.ok) {
-      // Fallback direto (requer RLS permissiva)
-      const newShop = { name, slug, email, password_hash: pass, role: 'user', status: 'active' };
-      if (mpToken) newShop.mp_token = mpToken;
-      const { error } = await db.from('barbershops').insert(newShop);
-      if (error) { showLoading(false); showToast(error.message.includes('unique') ? 'Telefone ou slug ja em uso!' : 'Erro ao salvar!', 'error'); return; }
+      // Sem fallback direto — senha nunca deve ser salva em texto puro sem Edge Function
+      showLoading(false);
+      showToast('Erro ao criar barbearia. Verifique a Edge Function admin-update.', 'error');
+      return;
     }
   } catch(e) {
-    const newShop = { name, slug, email, password_hash: pass, role: 'user', status: 'active' };
-    if (mpToken) newShop.mp_token = mpToken;
-    const { error } = await db.from('barbershops').insert(newShop);
-    if (error) { showLoading(false); showToast(error.message.includes('unique') ? 'Telefone ou slug ja em uso!' : 'Erro ao salvar!', 'error'); return; }
+    showLoading(false);
+    showToast('Erro de conexão ao criar barbearia. Tente novamente.', 'error');
+    return;
   }
   showLoading(false);
   closeModal('modal-add-user');
@@ -2601,13 +2599,15 @@ async function saveMpToken() {
       body: JSON.stringify({ id: currentShop.id, updates: { mp_token: token } })
     });
     if (!resp.ok) {
-      // Fallback direto
-      const { error } = await db.from('barbershops').update({ mp_token: token }).eq('id', currentShop.id);
-      if (error) { showLoading(false); status.textContent = 'Erro ao salvar token.'; status.style.color = 'red'; return; }
+      // Sem fallback direto — mp_token nunca deve trafegar direto do frontend ao banco
+      showLoading(false);
+      status.textContent = 'Erro ao salvar. Verifique a Edge Function admin-update.';
+      status.style.color = 'red'; return;
     }
   } catch(e) {
-    const { error } = await db.from('barbershops').update({ mp_token: token }).eq('id', currentShop.id);
-    if (error) { showLoading(false); status.textContent = 'Erro ao salvar token.'; status.style.color = 'red'; return; }
+    showLoading(false);
+    status.textContent = 'Erro de conexão. Tente novamente.';
+    status.style.color = 'red'; return;
   }
   showLoading(false);
   // Marca que token existe mas NAO guarda o valor em memoria
@@ -3257,7 +3257,9 @@ async function saveEditShop() {
   showLoading(true);
   const updates = { name, email: phone, slug, status };
   if (pass) updates.password_hash = pass;
-  if (mpToken) updates.mp_token = mpToken;
+  // mp_token nunca vai no fallback direto — apenas via Edge Function
+  const safeUpdates = { name, email: phone, slug, status };
+  if (pass) safeUpdates.password_hash = pass;
   try {
     // Tenta via Edge Function admin-update (service_role, bypassa RLS)
     const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
@@ -3270,13 +3272,13 @@ async function saveEditShop() {
       body: JSON.stringify({ id, updates })
     });
     if (!resp.ok) {
-      // Fallback: tenta direto (requer RLS permissiva para admin)
-      const { error } = await db.from('barbershops').update(updates).eq('id', id);
+      // Fallback sem mp_token (dado sensível nunca vai direto ao banco pelo frontend)
+      const { error } = await db.from('barbershops').update(safeUpdates).eq('id', id);
       if (error) { showLoading(false); showToast('Erro: ' + error.message,'error'); return; }
     }
   } catch(e) {
-    // Fallback direto ao Supabase
-    const { error } = await db.from('barbershops').update(updates).eq('id', id);
+    // Fallback direto sem dados sensíveis
+    const { error } = await db.from('barbershops').update(safeUpdates).eq('id', id);
     if (error) { showLoading(false); showToast('Erro: ' + error.message,'error'); return; }
   }
   showLoading(false);
