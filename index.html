@@ -1961,7 +1961,8 @@ function sendReminder(bookingId) {
 // =====================================================
 function renderClienteTab() {
   const slug = currentShop?.slug || 'barbearia';
-  const base = window.location.origin + window.location.pathname;
+  // URL fixa do GitHub Pages — garante link correto independente de onde o sistema é acessado
+  const base = 'https://appnegociodigital.github.io/index.html';
   const link = `${base}?b=${slug}`;
   document.getElementById('booking-link').textContent = link;
   loadDepositConfig();
@@ -2045,17 +2046,61 @@ async function saveUser() {
 
 async function toggleUserStatus(id, currentStatus) {
   const newStatus = currentStatus === 'blocked' ? 'active' : 'blocked';
-  await db.from('barbershops').update({ status: newStatus }).eq('id', id);
-  await renderAdminUsers();
-  showToast(newStatus === 'blocked' ? 'Barbearia bloqueada!' : 'Barbearia ativada!', newStatus === 'blocked' ? 'error' : 'success');
+  const acao = newStatus === 'blocked' ? 'bloquear' : 'ativar';
+  if (!confirm(`Deseja ${acao} esta barbearia?`)) return;
+  showLoading(true);
+  try {
+    // Usa Edge Function admin-update para contornar RLS (service_role no servidor)
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY_CFG,
+        'Authorization': 'Bearer ' + SUPABASE_KEY_CFG
+      },
+      body: JSON.stringify({ id, updates: { status: newStatus } })
+    });
+    // Fallback: se a Edge Function não existir, tenta direto (precisa de RLS permissiva)
+    if (!resp.ok) {
+      const { error } = await db.from('barbershops').update({ status: newStatus }).eq('id', id);
+      if (error) { showLoading(false); showToast('Erro ao alterar status: ' + error.message, 'error'); return; }
+    }
+    await renderAdminUsers();
+    showToast(newStatus === 'blocked' ? '🔒 Barbearia bloqueada!' : '✅ Barbearia ativada!', newStatus === 'blocked' ? 'error' : 'success');
+  } catch(e) {
+    // Fallback direto ao Supabase
+    const { error } = await db.from('barbershops').update({ status: newStatus }).eq('id', id);
+    if (error) { showLoading(false); showToast('Erro: ' + error.message, 'error'); return; }
+    await renderAdminUsers();
+    showToast(newStatus === 'blocked' ? '🔒 Barbearia bloqueada!' : '✅ Barbearia ativada!', newStatus === 'blocked' ? 'error' : 'success');
+  }
+  showLoading(false);
 }
 
 async function deleteUser(id) {
-  if (!confirm('Excluir esta barbearia e todos os dados?')) return;
+  if (!confirm('Excluir esta barbearia e todos os dados? Esta ação não pode ser desfeita!')) return;
   showLoading(true);
-  await db.from('barbershops').delete().eq('id', id);
+  try {
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY_CFG,
+        'Authorization': 'Bearer ' + SUPABASE_KEY_CFG
+      },
+      body: JSON.stringify({ id })
+    });
+    if (!resp.ok) {
+      const { error } = await db.from('barbershops').delete().eq('id', id);
+      if (error) { showLoading(false); showToast('Erro ao excluir: ' + error.message, 'error'); return; }
+    }
+  } catch(e) {
+    const { error } = await db.from('barbershops').delete().eq('id', id);
+    if (error) { showLoading(false); showToast('Erro ao excluir: ' + error.message, 'error'); return; }
+  }
   await renderAdminUsers();
-  showLoading(false); showToast('Barbearia removida!', 'success');
+  showLoading(false);
+  showToast('🗑️ Barbearia removida!', 'success');
 }
 
 // =====================================================
@@ -2927,12 +2972,31 @@ async function saveEditShop() {
   const updates = { name, email: phone, slug, status };
   if (pass) updates.password_hash = pass;
   if (mpToken) updates.mp_token = mpToken;
-  const { error } = await db.from('barbershops').update(updates).eq('id', id);
+  try {
+    // Tenta via Edge Function admin-update (service_role, bypassa RLS)
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY_CFG,
+        'Authorization': 'Bearer ' + SUPABASE_KEY_CFG
+      },
+      body: JSON.stringify({ id, updates })
+    });
+    if (!resp.ok) {
+      // Fallback: tenta direto (requer RLS permissiva para admin)
+      const { error } = await db.from('barbershops').update(updates).eq('id', id);
+      if (error) { showLoading(false); showToast('Erro: ' + error.message,'error'); return; }
+    }
+  } catch(e) {
+    // Fallback direto ao Supabase
+    const { error } = await db.from('barbershops').update(updates).eq('id', id);
+    if (error) { showLoading(false); showToast('Erro: ' + error.message,'error'); return; }
+  }
   showLoading(false);
-  if (error) { showToast('Erro: ' + error.message,'error'); return; }
   closeModal('modal-edit-shop');
   await renderAdminUsers();
-  showToast('Barbearia atualizada com sucesso!','success');
+  showToast('✅ Barbearia atualizada com sucesso!','success');
 }
 
 // =====================================================
