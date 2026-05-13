@@ -3434,22 +3434,14 @@ async function sendConfirmacaoAuto(bookingData) {
   } else {
     // Fallback: abre WhatsApp manualmente
     const msg = encodeURIComponent(
-      'Agendamento Confirmado!
-' +
-      'Barbeiro: ' + (br ? br.name : '') + '
-' +
-      'Servico: ' + (sv ? sv.name : '') + '
-' +
-      'Data: ' + formatDate(clientFlow.date) + '
-' +
-      'Horario: ' + clientFlow.time + '
-' +
+      'Agendamento Confirmado!\n' +
+      'Barbeiro: ' + (br ? br.name : '') + '\n' +
+      'Servico: ' + (sv ? sv.name : '') + '\n' +
+      'Data: ' + formatDate(clientFlow.date) + '\n' +
+      'Horario: ' + clientFlow.time + '\n' +
       'Valor: R$' + (sv ? Number(sv.price).toFixed(2) : '0') +
       sinalInfo +
-      '
-
-Reagendamento gratuito ate 24h antes.
-Ate logo!'
+      '\n\nReagendamento gratuito ate 24h antes.\nAte logo!'
     );
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const url = isMobile
