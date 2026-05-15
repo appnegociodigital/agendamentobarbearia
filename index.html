@@ -636,30 +636,33 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         <div id="email-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
       </div>
 
-      <!-- NOTIFICAÇÃO PUSH (FCM) -->
+      <!-- NOTIFICAÇÃO PUSH (VAPID — sem Firebase) -->
       <div class="card" id="card-push-config">
         <div class="card-header">
-          <span class="card-title">🔔 NOTIFICAÇÃO PUSH (FCM)</span>
+          <span class="card-title">🔔 NOTIFICAÇÃO PUSH</span>
           <span id="push-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
         </div>
         <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
-          Envie lembretes diretamente no celular do cliente, <b>gratuitamente e sem limites</b>.<br>
-          <span style="color:var(--blue);font-weight:600">Obtenha em:</span> console.firebase.google.com → Seu Projeto → Project Settings → Cloud Messaging
+          Envie lembretes no celular do cliente <b>gratuitamente, sem Firebase e sem limites</b>.<br>
+          Funciona 100% via Supabase — gere suas chaves VAPID com o comando abaixo (apenas uma vez):
+        </div>
+        <div style="background:#1e1e1e;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;font-family:monospace;font-size:0.78rem;color:#4FC3F7">
+          npx web-push generate-vapid-keys
         </div>
         <div class="form-group">
-          <label>🔑 FCM Server Key</label>
-          <input type="text" id="fcm-server-key" placeholder="AAAAxxxxxxx:APABxxxxx..." style="font-size:0.8rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Project Settings → Cloud Messaging → Server key (Legacy)</small>
+          <label>🔑 VAPID Public Key</label>
+          <input type="text" id="vapid-public-key" placeholder="BNxxxxxxxxxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Chave pública gerada pelo comando acima — vai no frontend e no Supabase</small>
         </div>
         <div class="form-group">
-          <label>🔑 VAPID Key (Web Push)</label>
-          <input type="text" id="fcm-vapid-key" placeholder="BNxxxxxxxx..." style="font-size:0.8rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Project Settings → Cloud Messaging → Web configuration → Key pair</small>
+          <label>🔒 VAPID Private Key</label>
+          <input type="password" id="vapid-private-key" placeholder="xxxxxxxxxxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Chave privada — salva apenas como variável de ambiente no Supabase (nunca exposta)</small>
         </div>
         <div class="form-group">
-          <label>⚙️ Firebase Config (JSON)</label>
-          <textarea id="fcm-config-json" rows="4" placeholder='{"apiKey":"...","projectId":"...","messagingSenderId":"...","appId":"..."}' style="font-size:0.75rem;resize:vertical"></textarea>
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Project Settings → General → Your apps → SDK setup and configuration</small>
+          <label>📧 E-mail de contato VAPID</label>
+          <input type="email" id="vapid-email" placeholder="contato@suabarbearia.com" style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Exigido pelo protocolo Web Push — não será exibido ao cliente</small>
         </div>
         <button class="btn-primary" onclick="savePushConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
         <div id="push-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
@@ -1709,7 +1712,7 @@ async function doBiometricLogin() {
     // Biometria confirmada — busca os dados da barbearia pelo shopId salvo
     showLoading(true);
     const { data, error } = await db.from('barbershops')
-      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,waba_phone_id,waba_phone_number_id,waba_configured,resend_api_key,resend_from_email,email_configured,fcm_server_key,fcm_vapid_key,fcm_config,push_configured')
+      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,waba_phone_id,waba_phone_number_id,waba_configured,resend_api_key,resend_from_email,email_configured,vapid_public_key,vapid_email,push_configured')
       .eq('id', credData.shopId).eq('status', 'active').single();
     showLoading(false);
     if (error || !data) {
@@ -2357,7 +2360,7 @@ async function initClientScreen(slug) {
   showLoading(true);
   // Tela pública: NÃO inclui mp_token (dado sensível da barbearia)
   // O Edge Function mp-payment busca o token internamente pelo shop_id
-  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit,waba_configured,email_configured,resend_from_email,fcm_vapid_key,fcm_config,push_configured').eq('slug', slug).eq('status', 'active').single();
+  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit,waba_configured,email_configured,resend_from_email,vapid_public_key,push_configured').eq('slug', slug).eq('status', 'active').single();
   if (!shop) {
     showLoading(false);
     // Slug inválido ou banco não configurado — mostrar tela de login
@@ -2909,9 +2912,9 @@ async function doConfirmBooking() {
     if (emailNotice) emailNotice.style.display = 'block';
   }
   // ── Envio de push de confirmação ──────────────────────────────────
-  if (window._pushToken) {
+  if (window._pushSubscription) {
     const pushSent = await sendPushNotificacao(
-      window._pushToken,
+      window._pushSubscription,
       '✅ Agendamento confirmado!',
       `${clientFlow.time} com ${br ? br.name : ''} — ${formatDate(clientFlow.date)}`,
       window.location.href
@@ -3683,33 +3686,37 @@ async function sendEmailConfirmacao(bookingData) {
 }
 
 // =====================================================
-//  PUSH (FCM) — WEB PUSH
+//  PUSH (VAPID PURO — sem Firebase)
 // =====================================================
 async function savePushConfig() {
-  const serverKey = document.getElementById('fcm-server-key').value.trim();
-  const vapidKey = document.getElementById('fcm-vapid-key').value.trim();
-  const configJson = document.getElementById('fcm-config-json').value.trim();
-  const status = document.getElementById('push-config-status');
-  if (!serverKey || !vapidKey || !configJson) { status.textContent = '⚠️ Preencha todos os campos.'; status.style.color = 'var(--red)'; return; }
-  let parsedConfig;
-  try { parsedConfig = JSON.parse(configJson); } catch(e) { status.textContent = '❌ JSON inválido no Firebase Config.'; status.style.color = 'var(--red)'; return; }
+  const publicKey  = document.getElementById('vapid-public-key').value.trim();
+  const privateKey = document.getElementById('vapid-private-key').value.trim();
+  const email      = document.getElementById('vapid-email').value.trim();
+  const status     = document.getElementById('push-config-status');
+  if (!publicKey || !privateKey || !email) { status.textContent = '⚠️ Preencha todos os campos.'; status.style.color = 'var(--red)'; return; }
   showLoading(true);
   try {
+    // Salva public key e email no banco (a private key vai como env var no Supabase)
     const { error } = await db.from('barbershops').update({
-      fcm_server_key: serverKey,
-      fcm_vapid_key: vapidKey,
-      fcm_config: parsedConfig,
+      vapid_public_key: publicKey,
+      vapid_email: email,
       push_configured: true
     }).eq('id', currentShop.id);
     if (error) throw error;
-    currentShop.fcm_server_key = serverKey;
-    currentShop.fcm_vapid_key = vapidKey;
-    currentShop.fcm_config = parsedConfig;
+    // Salva a private key como secret via Edge Function (nunca exposta no frontend)
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/save-vapid-secret', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({ shop_id: currentShop.id, vapid_private_key: privateKey })
+    });
+    currentShop.vapid_public_key = publicKey;
+    currentShop.vapid_email = email;
     currentShop.push_configured = true;
     document.getElementById('push-status-badge').style.display = 'inline';
-    status.textContent = '✅ Push configurado com sucesso!';
+    document.getElementById('vapid-private-key').value = '';
+    status.textContent = '✅ Push configurado! (Private key salva com segurança)';
     status.style.color = '#2E7D32';
-    showToast('Push FCM configurado!', 'success');
+    showToast('Push VAPID configurado!', 'success');
   } catch(e) {
     status.textContent = '❌ Erro ao salvar: ' + (e.message || e);
     status.style.color = 'var(--red)';
@@ -3717,16 +3724,14 @@ async function savePushConfig() {
   showLoading(false);
 }
 
-// Ativação do push pelo cliente (solicita permissão + salva token no Supabase)
+// Ativação do push pelo cliente — usa Web Push nativo do navegador (sem Firebase)
 async function ativarPushCliente() {
-  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     showToast('Seu navegador não suporta notificações push.', 'error');
     return;
   }
-  // Precisa do vapidKey da barbearia atual
-  const vapidKey = clientShopData && clientShopData.fcm_vapid_key;
-  const fcmConfig = clientShopData && clientShopData.fcm_config;
-  if (!vapidKey || !fcmConfig) return; // push não configurado — silencioso
+  const vapidPublicKey = clientShopData && clientShopData.vapid_public_key;
+  if (!vapidPublicKey) return; // push não configurado — silencioso
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
@@ -3734,56 +3739,61 @@ async function ativarPushCliente() {
     return;
   }
   try {
-    // Inicializa Firebase dinamicamente
-    if (!window._fcmApp) {
-      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
-      const { getMessaging, getToken } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging.js');
-      window._fcmApp = initializeApp(fcmConfig, 'barbearia-client');
-      window._fcmMessaging = getMessaging(window._fcmApp);
-      window._fcmGetToken = getToken;
-    }
-    const token = await window._fcmGetToken(window._fcmMessaging, { vapidKey });
-    if (!token) { showToast('Não foi possível obter token push.', 'error'); return; }
-    // Salva token vinculado à barbearia
-    await db.from('push_tokens').upsert({
+    // Obtém o Service Worker registrado
+    const reg = await navigator.serviceWorker.ready;
+    // Converte VAPID public key de base64 para Uint8Array
+    const appServerKey = _urlBase64ToUint8Array(vapidPublicKey);
+    // Cria a subscription Web Push nativa
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: appServerKey
+    });
+    // Salva a subscription no Supabase vinculada à barbearia e telefone do cliente
+    const phone = (document.getElementById('client-whatsapp') ? document.getElementById('client-whatsapp').value.replace(/\D/g,'') : '');
+    await db.from('push_subscriptions').upsert({
       shop_id: clientShopData.id,
-      phone: (document.getElementById('client-whatsapp') ? document.getElementById('client-whatsapp').value.replace(/\D/g,'') : ''),
-      token,
+      phone,
+      subscription: JSON.stringify(subscription),
       updated_at: new Date().toISOString()
-    }, { onConflict: 'token' });
+    }, { onConflict: 'shop_id,phone' });
+
     document.getElementById('push-permission-box').style.display = 'none';
     document.getElementById('push-ativo-box').style.display = 'block';
-    window._pushToken = token;
+    window._pushSubscription = subscription;
     showToast('🔔 Notificações ativadas!', 'success');
   } catch(e) {
     showToast('Erro ao ativar push: ' + (e.message || e), 'error');
   }
 }
 
-async function sendPushNotificacao(token, titulo, corpo, url) {
+// Converte VAPID base64 para Uint8Array (necessário para pushManager.subscribe)
+function _urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function sendPushNotificacao(subscription, titulo, corpo, url) {
   if (!clientShopData || !clientShopData.push_configured) return false;
   try {
     const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
-      body: JSON.stringify({ shop_id: clientShopData.id, token, titulo, corpo, url })
+      body: JSON.stringify({ shop_id: clientShopData.id, subscription, titulo, corpo, url })
     });
     return resp.ok;
   } catch(e) { return false; }
 }
 
-// =====================================================
-//  CARREGAR CONFIGS DE E-MAIL E PUSH NO PAINEL
-// =====================================================
 function loadEmailPushConfig() {
   if (!currentShop) return;
-  if (currentShop.resend_api_key) document.getElementById('resend-api-key').value = currentShop.resend_api_key;
+  if (currentShop.resend_api_key)    document.getElementById('resend-api-key').value    = currentShop.resend_api_key;
   if (currentShop.resend_from_email) document.getElementById('resend-from-email').value = currentShop.resend_from_email;
-  if (currentShop.email_configured) document.getElementById('email-status-badge').style.display = 'inline';
-  if (currentShop.fcm_server_key) document.getElementById('fcm-server-key').value = currentShop.fcm_server_key;
-  if (currentShop.fcm_vapid_key) document.getElementById('fcm-vapid-key').value = currentShop.fcm_vapid_key;
-  if (currentShop.fcm_config) document.getElementById('fcm-config-json').value = JSON.stringify(currentShop.fcm_config, null, 2);
-  if (currentShop.push_configured) document.getElementById('push-status-badge').style.display = 'inline';
+  if (currentShop.email_configured)  document.getElementById('email-status-badge').style.display = 'inline';
+  if (currentShop.vapid_public_key)  document.getElementById('vapid-public-key').value  = currentShop.vapid_public_key;
+  if (currentShop.vapid_email)       document.getElementById('vapid-email').value        = currentShop.vapid_email;
+  if (currentShop.push_configured)   document.getElementById('push-status-badge').style.display = 'inline';
 }
 
 window.saveEmailConfig   = saveEmailConfig;
@@ -3831,18 +3841,17 @@ async function sendBulkEmail(when) {
 
 async function sendBulkPush(when) {
   if (!currentShop || !currentShop.push_configured) {
-    showToast('Configure o Push FCM antes (aba Área do Cliente).', 'error'); return;
+    showToast('Configure o Push VAPID antes (aba Área do Cliente).', 'error'); return;
   }
   const bookings = _getBookingsForDay(when);
   if (bookings.length === 0) { showToast('Nenhum agendamento para ' + (when === 'today' ? 'hoje' : 'amanhã') + '.', 'error'); return; }
-  // Busca tokens dos clientes pelo telefone
   const phones = [...new Set(bookings.map(b => b.client_whatsapp.replace(/\D/g,'')))];
-  const { data: tokens } = await db.from('push_tokens').select('phone,token').eq('shop_id', currentShop.id).in('phone', phones);
-  if (!tokens || tokens.length === 0) { showToast('Nenhum cliente com push ativado.', 'error'); return; }
+  const { data: subs } = await db.from('push_subscriptions').select('phone,subscription').eq('shop_id', currentShop.id).in('phone', phones);
+  if (!subs || subs.length === 0) { showToast('Nenhum cliente com push ativado.', 'error'); return; }
   showLoading(true);
   let ok = 0;
-  for (const t of tokens) {
-    const b = bookings.find(bk => bk.client_whatsapp.replace(/\D/g,'') === t.phone);
+  for (const s of subs) {
+    const b = bookings.find(bk => bk.client_whatsapp.replace(/\D/g,'') === s.phone);
     if (!b) continue;
     const br = getBarber(b.barber_id);
     try {
@@ -3850,7 +3859,8 @@ async function sendBulkPush(when) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
         body: JSON.stringify({
-          shop_id: currentShop.id, token: t.token,
+          shop_id: currentShop.id,
+          subscription: typeof s.subscription === 'string' ? JSON.parse(s.subscription) : s.subscription,
           titulo: '⏰ Lembrete de amanhã!',
           corpo: `${b.booking_time} com ${br ? br.name : ''} — ${currentShop.name}`,
           url: window.location.origin + window.location.pathname + '?b=' + currentShop.slug
