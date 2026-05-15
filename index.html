@@ -512,6 +512,14 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
           <button class="btn-small" style="background:#128C7E;color:white;padding:0.45rem 0.85rem;font-size:0.8rem" onclick="sendBulkWhatsApp('tomorrow')">📅 Amanhã (em lote)</button>
         </div>
       </div>
+      <div id="card-bulk-email" class="card" style="margin-bottom:0.75rem;background:linear-gradient(135deg,#E8F0FC,#EDE7F6);border-left:4px solid var(--blue);display:none">
+        <div style="font-family:var(--font-title);color:var(--blue);font-size:0.9rem;letter-spacing:1px;margin-bottom:0.6rem">📧 ENVIAR LEMBRETES POR E-MAIL / PUSH</div>
+        <div style="font-size:0.75rem;color:var(--blue-mid);margin-bottom:0.75rem">Envie lembretes automáticos para agendamentos de amanhã (gratuito, sem limites de WhatsApp)</div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button class="btn-small" style="background:var(--blue);color:white;padding:0.45rem 0.85rem;font-size:0.8rem" onclick="sendBulkEmail('tomorrow')">📧 Amanhã por e-mail</button>
+          <button class="btn-small" style="background:#5C35C1;color:white;padding:0.45rem 0.85rem;font-size:0.8rem" onclick="sendBulkPush('tomorrow')">🔔 Amanhã por push</button>
+        </div>
+      </div>
       <div class="date-tabs" id="date-tabs"></div>
       <div id="agenda-barber-select" style="margin-bottom:1rem;display:none">
         <div class="form-group">
@@ -603,33 +611,84 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         <div id="mp-token-status" style="font-size:0.75rem;color:#4CAF50;margin-top:0.4rem;text-align:center"></div>
       </div>
 
-      <!-- WHATSAPP BUSINESS API -->
-      <div class="card" id="card-waba">
+      <!-- E-MAIL TRANSACIONAL -->
+      <div class="card" id="card-email-config">
         <div class="card-header">
-          <span class="card-title">📲 WHATSAPP BUSINESS API</span>
+          <span class="card-title">📧 CONFIRMAÇÃO POR E-MAIL</span>
+          <span id="email-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
+          Envie confirmações e lembretes por e-mail <b>automaticamente e gratuitamente</b>.<br>
+          <span style="color:var(--blue);font-weight:600">Obtenha a chave em:</span> resend.com → API Keys (plano gratuito: 3.000 e-mails/mês)
+        </div>
+        <div class="form-group">
+          <label>🔑 Resend API Key</label>
+          <input type="text" id="resend-api-key" placeholder="re_xxxxxxxxxxxxxxxx..." style="font-size:0.85rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Crie uma conta gratuita em resend.com e gere sua API Key</small>
+        </div>
+        <div class="form-group">
+          <label>📤 E-mail Remetente</label>
+          <input type="email" id="resend-from-email" placeholder="confirmacao@suabarbearia.com" style="font-size:0.85rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Use um domínio verificado no Resend. Ou use o padrão: onboarding@resend.dev (apenas para testes)</small>
+        </div>
+        <button class="btn-primary" onclick="saveEmailConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
+        <button class="btn-secondary" onclick="testEmailConfig()" style="width:100%;margin-top:0.5rem" id="btn-test-email">📨 ENVIAR E-MAIL DE TESTE</button>
+        <div id="email-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
+      </div>
+
+      <!-- NOTIFICAÇÃO PUSH (FCM) -->
+      <div class="card" id="card-push-config">
+        <div class="card-header">
+          <span class="card-title">🔔 NOTIFICAÇÃO PUSH (FCM)</span>
+          <span id="push-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
+          Envie lembretes diretamente no celular do cliente, <b>gratuitamente e sem limites</b>.<br>
+          <span style="color:var(--blue);font-weight:600">Obtenha em:</span> console.firebase.google.com → Seu Projeto → Project Settings → Cloud Messaging
+        </div>
+        <div class="form-group">
+          <label>🔑 FCM Server Key</label>
+          <input type="text" id="fcm-server-key" placeholder="AAAAxxxxxxx:APABxxxxx..." style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Project Settings → Cloud Messaging → Server key (Legacy)</small>
+        </div>
+        <div class="form-group">
+          <label>🔑 VAPID Key (Web Push)</label>
+          <input type="text" id="fcm-vapid-key" placeholder="BNxxxxxxxx..." style="font-size:0.8rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Project Settings → Cloud Messaging → Web configuration → Key pair</small>
+        </div>
+        <div class="form-group">
+          <label>⚙️ Firebase Config (JSON)</label>
+          <textarea id="fcm-config-json" rows="4" placeholder='{"apiKey":"...","projectId":"...","messagingSenderId":"...","appId":"..."}' style="font-size:0.75rem;resize:vertical"></textarea>
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Project Settings → General → Your apps → SDK setup and configuration</small>
+        </div>
+        <button class="btn-primary" onclick="savePushConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
+        <div id="push-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
+      </div>
+
+      <!-- WHATSAPP BUSINESS API (legado) -->
+      <div class="card" id="card-waba" style="opacity:0.7">
+        <div class="card-header">
+          <span class="card-title">📲 WHATSAPP BUSINESS API <span style="font-size:0.65rem;background:#FFF3E0;color:#E65100;padding:0.15rem 0.5rem;border-radius:20px;margin-left:0.4rem">LEGADO</span></span>
           <span id="waba-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
         </div>
         <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
-          Configure aqui para enviar mensagens de confirmação <b>automaticamente</b> para os clientes, sem precisar abrir o WhatsApp manualmente.<br>
+          Configuração antiga via Meta. Recomendamos usar <b>E-mail + Push</b> acima (gratuitos e sem burocracia).<br>
           <span style="color:var(--blue);font-weight:600">Obtenha em:</span> developers.facebook.com → Meus Apps → WhatsApp → Configuração
         </div>
         <div class="form-group">
           <label>📱 Número WhatsApp Business (com DDI)</label>
           <input type="tel" id="waba-phone-id" placeholder="Ex: 5585999990000" style="font-size:0.85rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Somente números, com DDI (55) + DDD + número</small>
         </div>
         <div class="form-group">
           <label>🆔 Phone Number ID (do painel Meta)</label>
           <input type="text" id="waba-phone-number-id" placeholder="Ex: 123456789012345" style="font-size:0.85rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Encontre em: Meta for Developers → Seu App → WhatsApp → Configuração API</small>
         </div>
         <div class="form-group">
           <label>🔑 Token de Acesso Permanente</label>
           <input type="text" id="waba-token" placeholder="EAAxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Gere em: Meta Business Suite → Configurações → Usuários do sistema → Gerar token</small>
         </div>
         <button class="btn-primary" onclick="saveWabaConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
-        <button class="btn-secondary" onclick="testWabaConfig()" style="width:100%;margin-top:0.5rem" id="btn-test-waba" style="display:none">📨 ENVIAR MENSAGEM DE TESTE</button>
+        <button class="btn-secondary" onclick="testWabaConfig()" style="width:100%;margin-top:0.5rem" id="btn-test-waba">📨 ENVIAR MENSAGEM DE TESTE</button>
         <div id="waba-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
       </div>
 
@@ -676,6 +735,16 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
       <div class="step-title"><div class="step-num">1</div> SEUS DADOS</div>
       <div class="form-group"><label>Seu Nome *</label><input type="text" id="client-name" placeholder="Como você se chama?"></div>
       <div class="form-group"><label>WhatsApp *</label><input type="tel" id="client-whatsapp" placeholder="(85) 99999-9999" oninput="checkExistingBooking(this.value)"></div>
+      <div class="form-group"><label>E-mail <span style="font-weight:400;color:var(--gray-mid)">(para confirmação)</span></label><input type="email" id="client-email" placeholder="seu@email.com"></div>
+      <div id="push-permission-box" style="background:#E8F0FC;border-radius:10px;padding:0.85rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;gap:0.75rem">
+        <span style="font-size:1.4rem">🔔</span>
+        <div style="flex:1">
+          <div style="font-size:0.8rem;font-weight:700;color:var(--blue)">Receber lembretes no celular?</div>
+          <div style="font-size:0.72rem;color:var(--gray-mid);margin-top:0.1rem">Ative para receber notificações de confirmação e lembrete</div>
+        </div>
+        <button onclick="ativarPushCliente()" id="btn-ativar-push" style="background:var(--blue);color:white;border:none;border-radius:8px;padding:0.45rem 0.75rem;font-size:0.75rem;font-weight:700;cursor:pointer;white-space:nowrap">ATIVAR</button>
+      </div>
+      <div id="push-ativo-box" style="display:none;background:#E8F5E9;border-radius:10px;padding:0.6rem 1rem;margin-bottom:0.5rem;font-size:0.8rem;color:#2E7D32;font-weight:600">✅ Notificações ativadas!</div>
       <div id="reagend-card-box" style="display:none" class="reagend-card">
         <h4>AGENDAMENTO ENCONTRADO</h4>
         <div class="reagend-info" id="reagend-card-info"></div>
@@ -730,7 +799,13 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         <h3>AGENDAMENTO CONFIRMADO!</h3>
         <p id="success-summary-text"></p>
         <div class="confirm-box" id="success-confirm-box" style="text-align:left;margin-top:1rem"></div>
-        <div style="background:#E8F5E9;border-radius:8px;padding:0.75rem;margin-top:1rem;font-size:0.8rem;color:#2E7D32;text-align:center">
+        <div id="success-email-notice" style="background:#E8F5E9;border-radius:8px;padding:0.75rem;margin-top:1rem;font-size:0.8rem;color:#2E7D32;text-align:center;display:none">
+          📧 Uma confirmação foi enviada ao seu e-mail!
+        </div>
+        <div id="success-push-notice" style="background:#E8F0FC;border-radius:8px;padding:0.75rem;margin-top:0.5rem;font-size:0.8rem;color:var(--blue);text-align:center;display:none">
+          🔔 Você receberá um lembrete por notificação!
+        </div>
+        <div style="background:#E8F5E9;border-radius:8px;padding:0.75rem;margin-top:0.5rem;font-size:0.8rem;color:#2E7D32;text-align:center">
           📱 Uma mensagem de confirmação foi enviada ao seu WhatsApp!
         </div>
         <div style="background:#FFF8E1;border-radius:8px;padding:0.75rem;margin-top:0.75rem;font-size:0.75rem;color:#5D4037;line-height:1.6;text-align:left">
@@ -1634,7 +1709,7 @@ async function doBiometricLogin() {
     // Biometria confirmada — busca os dados da barbearia pelo shopId salvo
     showLoading(true);
     const { data, error } = await db.from('barbershops')
-      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,waba_phone_id,waba_phone_number_id,waba_configured')
+      .select('id,name,slug,role,status,address,deposit_value,pix_key,block_credit,waba_phone_id,waba_phone_number_id,waba_configured,resend_api_key,resend_from_email,email_configured,fcm_server_key,fcm_vapid_key,fcm_config,push_configured')
       .eq('id', credData.shopId).eq('status', 'active').single();
     showLoading(false);
     if (error || !data) {
@@ -1735,7 +1810,11 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('nav-' + tab).classList.add('active');
-  if (tab === 'agenda') { renderDateTabs(); renderAgenda(); }
+  if (tab === 'agenda') {
+    renderDateTabs(); renderAgenda();
+    const cardBulkEmail = document.getElementById('card-bulk-email');
+    if (cardBulkEmail) cardBulkEmail.style.display = (currentShop && (currentShop.email_configured || currentShop.push_configured)) ? 'block' : 'none';
+  }
   if (tab === 'barbeiros') renderBarbers();
   if (tab === 'servicos') renderServices();
   if (tab === 'dashboard') updateDashboard();
@@ -2116,6 +2195,8 @@ function renderClienteTab() {
   const link = `${base}?b=${slug}`;
   document.getElementById('booking-link').textContent = link;
   loadDepositConfig();
+  loadWabaConfig();
+  loadEmailPushConfig();
   renderClientsTab();
 }
 
@@ -2276,7 +2357,7 @@ async function initClientScreen(slug) {
   showLoading(true);
   // Tela pública: NÃO inclui mp_token (dado sensível da barbearia)
   // O Edge Function mp-payment busca o token internamente pelo shop_id
-  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit').eq('slug', slug).eq('status', 'active').single();
+  const { data: shop } = await db.from('barbershops').select('id,name,slug,status,deposit_value,pix_key,block_credit,waba_configured,email_configured,resend_from_email,fcm_vapid_key,fcm_config,push_configured').eq('slug', slug).eq('status', 'active').single();
   if (!shop) {
     showLoading(false);
     // Slug inválido ou banco não configurado — mostrar tela de login
@@ -2292,6 +2373,9 @@ async function initClientScreen(slug) {
   document.getElementById('client-shop-name').textContent = shop.name.toUpperCase();
   document.title = shop.name + ' · Agendamento';
   document.documentElement.style.visibility = '';
+  // Mostra ou oculta botão push conforme configuração da barbearia
+  const pushBox = document.getElementById('push-permission-box');
+  if (pushBox) pushBox.style.display = (shop.push_configured && 'Notification' in window) ? 'flex' : 'none';
   showScreen('client-screen');
   clientStep(1);
   renderClientDateTabs();
@@ -2810,6 +2894,33 @@ async function doConfirmBooking() {
     <div class="confirm-row"><span class="confirm-label">Valor Total</span><span>R$${sv ? Number(sv.price).toFixed(2) : 0}</span></div>${depositInfo}`;
   for (let i = 1; i <= 5; i++) { const el = document.getElementById('client-step-' + i); if (el) el.style.display = 'none'; }
   document.getElementById('client-step-6').style.display = 'block';
+  // ── Envio de e-mail de confirmação ──────────────────────────────────
+  const emailSent = await sendEmailConfirmacao({
+    client_name: clientFlow.name,
+    barber_name: br ? br.name : '',
+    service_name: sv ? sv.name : '',
+    date: formatDate(clientFlow.date),
+    time: clientFlow.time,
+    price: sv ? Number(sv.price).toFixed(2) : '0',
+    booking_token: (window._lastBookingId || '')
+  });
+  if (emailSent) {
+    const emailNotice = document.getElementById('success-email-notice');
+    if (emailNotice) emailNotice.style.display = 'block';
+  }
+  // ── Envio de push de confirmação ──────────────────────────────────
+  if (window._pushToken) {
+    const pushSent = await sendPushNotificacao(
+      window._pushToken,
+      '✅ Agendamento confirmado!',
+      `${clientFlow.time} com ${br ? br.name : ''} — ${formatDate(clientFlow.date)}`,
+      window.location.href
+    );
+    if (pushSent) {
+      const pushNotice = document.getElementById('success-push-notice');
+      if (pushNotice) pushNotice.style.display = 'block';
+    }
+  }
   // Envio automático da mensagem WhatsApp — abre diretamente sem clicar em reenviar
   sendWhatsAppConfirm();
 }
@@ -3489,8 +3600,273 @@ async function sendReminderAuto(bookingId) {
 }
 
 // =====================================================
-//  PWA — INSTALAR APP
+//  E-MAIL (RESEND) — CONFIRMAÇÃO E LEMBRETE
 // =====================================================
+async function saveEmailConfig() {
+  const apiKey = document.getElementById('resend-api-key').value.trim();
+  const fromEmail = document.getElementById('resend-from-email').value.trim();
+  const status = document.getElementById('email-config-status');
+  if (!apiKey || !fromEmail) { status.textContent = '⚠️ Preencha todos os campos.'; status.style.color = 'var(--red)'; return; }
+  showLoading(true);
+  try {
+    const { error } = await db.from('barbershops').update({
+      resend_api_key: apiKey,
+      resend_from_email: fromEmail,
+      email_configured: true
+    }).eq('id', currentShop.id);
+    if (error) throw error;
+    currentShop.resend_api_key = apiKey;
+    currentShop.resend_from_email = fromEmail;
+    currentShop.email_configured = true;
+    document.getElementById('email-status-badge').style.display = 'inline';
+    status.textContent = '✅ Configuração salva com sucesso!';
+    status.style.color = '#2E7D32';
+    showToast('E-mail configurado!', 'success');
+  } catch(e) {
+    status.textContent = '❌ Erro ao salvar: ' + (e.message || e);
+    status.style.color = 'var(--red)';
+  }
+  showLoading(false);
+}
+
+async function testEmailConfig() {
+  const apiKey = document.getElementById('resend-api-key').value.trim();
+  const fromEmail = document.getElementById('resend-from-email').value.trim();
+  const status = document.getElementById('email-config-status');
+  if (!apiKey || !fromEmail) { status.textContent = '⚠️ Salve a configuração primeiro.'; status.style.color = 'var(--red)'; return; }
+  showLoading(true);
+  try {
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({ shop_id: currentShop.id, type: 'teste', to: fromEmail })
+    });
+    const r = await resp.json();
+    if (resp.ok && !r.error) {
+      status.textContent = '✅ E-mail de teste enviado para ' + fromEmail;
+      status.style.color = '#2E7D32';
+    } else {
+      status.textContent = '❌ Erro: ' + (r.error || 'Falha no envio');
+      status.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    status.textContent = '❌ Erro de conexão';
+    status.style.color = 'var(--red)';
+  }
+  showLoading(false);
+}
+
+async function sendEmailConfirmacao(bookingData) {
+  if (!clientShopData || !clientShopData.email_configured) return false;
+  const email = document.getElementById('client-email') ? document.getElementById('client-email').value.trim() : '';
+  if (!email) return false;
+  try {
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({
+        shop_id: clientShopData.id,
+        type: 'confirmacao',
+        to: email,
+        client_name: bookingData.client_name,
+        barber_name: bookingData.barber_name,
+        service_name: bookingData.service_name,
+        date: bookingData.date,
+        time: bookingData.time,
+        price: bookingData.price,
+        shop_name: clientShopData.name,
+        booking_token: bookingData.booking_token
+      })
+    });
+    return resp.ok;
+  } catch(e) { return false; }
+}
+
+// =====================================================
+//  PUSH (FCM) — WEB PUSH
+// =====================================================
+async function savePushConfig() {
+  const serverKey = document.getElementById('fcm-server-key').value.trim();
+  const vapidKey = document.getElementById('fcm-vapid-key').value.trim();
+  const configJson = document.getElementById('fcm-config-json').value.trim();
+  const status = document.getElementById('push-config-status');
+  if (!serverKey || !vapidKey || !configJson) { status.textContent = '⚠️ Preencha todos os campos.'; status.style.color = 'var(--red)'; return; }
+  let parsedConfig;
+  try { parsedConfig = JSON.parse(configJson); } catch(e) { status.textContent = '❌ JSON inválido no Firebase Config.'; status.style.color = 'var(--red)'; return; }
+  showLoading(true);
+  try {
+    const { error } = await db.from('barbershops').update({
+      fcm_server_key: serverKey,
+      fcm_vapid_key: vapidKey,
+      fcm_config: parsedConfig,
+      push_configured: true
+    }).eq('id', currentShop.id);
+    if (error) throw error;
+    currentShop.fcm_server_key = serverKey;
+    currentShop.fcm_vapid_key = vapidKey;
+    currentShop.fcm_config = parsedConfig;
+    currentShop.push_configured = true;
+    document.getElementById('push-status-badge').style.display = 'inline';
+    status.textContent = '✅ Push configurado com sucesso!';
+    status.style.color = '#2E7D32';
+    showToast('Push FCM configurado!', 'success');
+  } catch(e) {
+    status.textContent = '❌ Erro ao salvar: ' + (e.message || e);
+    status.style.color = 'var(--red)';
+  }
+  showLoading(false);
+}
+
+// Ativação do push pelo cliente (solicita permissão + salva token no Supabase)
+async function ativarPushCliente() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    showToast('Seu navegador não suporta notificações push.', 'error');
+    return;
+  }
+  // Precisa do vapidKey da barbearia atual
+  const vapidKey = clientShopData && clientShopData.fcm_vapid_key;
+  const fcmConfig = clientShopData && clientShopData.fcm_config;
+  if (!vapidKey || !fcmConfig) return; // push não configurado — silencioso
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    showToast('Permissão de notificação negada.', 'error');
+    return;
+  }
+  try {
+    // Inicializa Firebase dinamicamente
+    if (!window._fcmApp) {
+      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+      const { getMessaging, getToken } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging.js');
+      window._fcmApp = initializeApp(fcmConfig, 'barbearia-client');
+      window._fcmMessaging = getMessaging(window._fcmApp);
+      window._fcmGetToken = getToken;
+    }
+    const token = await window._fcmGetToken(window._fcmMessaging, { vapidKey });
+    if (!token) { showToast('Não foi possível obter token push.', 'error'); return; }
+    // Salva token vinculado à barbearia
+    await db.from('push_tokens').upsert({
+      shop_id: clientShopData.id,
+      phone: (document.getElementById('client-whatsapp') ? document.getElementById('client-whatsapp').value.replace(/\D/g,'') : ''),
+      token,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'token' });
+    document.getElementById('push-permission-box').style.display = 'none';
+    document.getElementById('push-ativo-box').style.display = 'block';
+    window._pushToken = token;
+    showToast('🔔 Notificações ativadas!', 'success');
+  } catch(e) {
+    showToast('Erro ao ativar push: ' + (e.message || e), 'error');
+  }
+}
+
+async function sendPushNotificacao(token, titulo, corpo, url) {
+  if (!clientShopData || !clientShopData.push_configured) return false;
+  try {
+    const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+      body: JSON.stringify({ shop_id: clientShopData.id, token, titulo, corpo, url })
+    });
+    return resp.ok;
+  } catch(e) { return false; }
+}
+
+// =====================================================
+//  CARREGAR CONFIGS DE E-MAIL E PUSH NO PAINEL
+// =====================================================
+function loadEmailPushConfig() {
+  if (!currentShop) return;
+  if (currentShop.resend_api_key) document.getElementById('resend-api-key').value = currentShop.resend_api_key;
+  if (currentShop.resend_from_email) document.getElementById('resend-from-email').value = currentShop.resend_from_email;
+  if (currentShop.email_configured) document.getElementById('email-status-badge').style.display = 'inline';
+  if (currentShop.fcm_server_key) document.getElementById('fcm-server-key').value = currentShop.fcm_server_key;
+  if (currentShop.fcm_vapid_key) document.getElementById('fcm-vapid-key').value = currentShop.fcm_vapid_key;
+  if (currentShop.fcm_config) document.getElementById('fcm-config-json').value = JSON.stringify(currentShop.fcm_config, null, 2);
+  if (currentShop.push_configured) document.getElementById('push-status-badge').style.display = 'inline';
+}
+
+window.saveEmailConfig   = saveEmailConfig;
+window.testEmailConfig   = testEmailConfig;
+window.savePushConfig    = savePushConfig;
+window.ativarPushCliente = ativarPushCliente;
+window.loadEmailPushConfig = loadEmailPushConfig;
+
+// =====================================================
+//  ENVIO EM LOTE — E-MAIL E PUSH
+// =====================================================
+function _getBookingsForDay(when) {
+  const target = when === 'today' ? getDateStr(0) : getDateStr(1);
+  return state.bookings.filter(b => b.booking_date === target);
+}
+
+async function sendBulkEmail(when) {
+  if (!currentShop || !currentShop.email_configured) {
+    showToast('Configure o e-mail antes (aba Área do Cliente).', 'error'); return;
+  }
+  const bookings = _getBookingsForDay(when);
+  const comEmail = bookings.filter(b => b.client_email);
+  if (comEmail.length === 0) { showToast('Nenhum cliente com e-mail para ' + (when === 'today' ? 'hoje' : 'amanhã') + '.', 'error'); return; }
+  showLoading(true);
+  let ok = 0;
+  for (const b of comEmail) {
+    const br = getBarber(b.barber_id); const sv = getService(b.service_id);
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+        body: JSON.stringify({
+          shop_id: currentShop.id, type: 'lembrete', to: b.client_email,
+          client_name: b.client_name, barber_name: br ? br.name : '',
+          service_name: sv ? sv.name : '', date: formatDate(b.booking_date),
+          time: b.booking_time, shop_name: currentShop.name
+        })
+      });
+      if (resp.ok) ok++;
+    } catch(e) {}
+  }
+  showLoading(false);
+  showToast(`📧 ${ok} de ${comEmail.length} e-mails enviados!`, 'success');
+}
+
+async function sendBulkPush(when) {
+  if (!currentShop || !currentShop.push_configured) {
+    showToast('Configure o Push FCM antes (aba Área do Cliente).', 'error'); return;
+  }
+  const bookings = _getBookingsForDay(when);
+  if (bookings.length === 0) { showToast('Nenhum agendamento para ' + (when === 'today' ? 'hoje' : 'amanhã') + '.', 'error'); return; }
+  // Busca tokens dos clientes pelo telefone
+  const phones = [...new Set(bookings.map(b => b.client_whatsapp.replace(/\D/g,'')))];
+  const { data: tokens } = await db.from('push_tokens').select('phone,token').eq('shop_id', currentShop.id).in('phone', phones);
+  if (!tokens || tokens.length === 0) { showToast('Nenhum cliente com push ativado.', 'error'); return; }
+  showLoading(true);
+  let ok = 0;
+  for (const t of tokens) {
+    const b = bookings.find(bk => bk.client_whatsapp.replace(/\D/g,'') === t.phone);
+    if (!b) continue;
+    const br = getBarber(b.barber_id);
+    try {
+      const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
+        body: JSON.stringify({
+          shop_id: currentShop.id, token: t.token,
+          titulo: '⏰ Lembrete de amanhã!',
+          corpo: `${b.booking_time} com ${br ? br.name : ''} — ${currentShop.name}`,
+          url: window.location.origin + window.location.pathname + '?b=' + currentShop.slug
+        })
+      });
+      if (resp.ok) ok++;
+    } catch(e) {}
+  }
+  showLoading(false);
+  showToast(`🔔 ${ok} notificações push enviadas!`, 'success');
+}
+
+window.sendBulkEmail = sendBulkEmail;
+window.sendBulkPush  = sendBulkPush;
+
+
 async function instalarApp() {
   var prompt = window._pwaPrompt;
   if (!prompt) {
