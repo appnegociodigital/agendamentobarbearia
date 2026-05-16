@@ -618,18 +618,18 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
           <span id="email-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
         </div>
         <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
-          Envie confirmações e lembretes por e-mail <b>automaticamente e gratuitamente</b>.<br>
-          <span style="color:var(--blue);font-weight:600">Obtenha a chave em:</span> resend.com → API Keys (plano gratuito: 3.000 e-mails/mês)
+          Envie confirmações por e-mail <b>automaticamente e gratuitamente</b> via Brevo.<br>
+          <span style="color:var(--blue);font-weight:600">Obtenha a chave em:</span> brevo.com → Configurações → SMTP & API → Chaves API (plano gratuito: 300 e-mails/dia)
         </div>
         <div class="form-group">
-          <label>🔑 Resend API Key</label>
-          <input type="text" id="resend-api-key" placeholder="re_xxxxxxxxxxxxxxxx..." style="font-size:0.85rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Crie uma conta gratuita em resend.com e gere sua API Key</small>
+          <label>🔑 Brevo API Key</label>
+          <input type="text" id="resend-api-key" placeholder="xkeysib-..." style="font-size:0.85rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Crie uma conta gratuita em brevo.com → Configurações → SMTP & API → Chaves API → Gerar nova chave</small>
         </div>
         <div class="form-group">
           <label>📤 E-mail Remetente</label>
-          <input type="email" id="resend-from-email" placeholder="confirmacao@suabarbearia.com" style="font-size:0.85rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Use um domínio verificado no Resend. Ou use o padrão: onboarding@resend.dev (apenas para testes)</small>
+          <input type="email" id="resend-from-email" placeholder="seuemail@gmail.com" style="font-size:0.85rem">
+          <small style="font-size:0.72rem;color:var(--gray-mid)">Use o e-mail verificado no Brevo como remetente (ex: seu Gmail cadastrado)</small>
         </div>
         <button class="btn-primary" onclick="saveEmailConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
         <button class="btn-secondary" onclick="testEmailConfig()" style="width:100%;margin-top:0.5rem" id="btn-test-email">📨 ENVIAR E-MAIL DE TESTE</button>
