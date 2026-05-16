@@ -899,12 +899,16 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
     <div class="form-group">
       <label>💈 Limite de Barbeiros</label>
       <select id="user-max-barbers-input">
-        <option value="1">1 barbeiro</option>
+        <option value="1" selected>1 barbeiro</option>
         <option value="2">2 barbeiros</option>
-        <option value="3" selected>3 barbeiros</option>
+        <option value="3">3 barbeiros</option>
+        <option value="4">4 barbeiros</option>
         <option value="5">5 barbeiros</option>
+        <option value="6">6 barbeiros</option>
+        <option value="7">7 barbeiros</option>
+        <option value="8">8 barbeiros</option>
+        <option value="9">9 barbeiros</option>
         <option value="10">10 barbeiros</option>
-        <option value="99">Ilimitado</option>
       </select>
       <small style="font-size:0.72rem;color:var(--gray-mid)">Máximo de barbeiros que esta barbearia pode cadastrar</small>
     </div>
@@ -941,9 +945,13 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         <option value="1">1 barbeiro</option>
         <option value="2">2 barbeiros</option>
         <option value="3">3 barbeiros</option>
+        <option value="4">4 barbeiros</option>
         <option value="5">5 barbeiros</option>
+        <option value="6">6 barbeiros</option>
+        <option value="7">7 barbeiros</option>
+        <option value="8">8 barbeiros</option>
+        <option value="9">9 barbeiros</option>
         <option value="10">10 barbeiros</option>
-        <option value="99">Ilimitado</option>
       </select>
     </div>
     <div class="form-group">
@@ -1902,7 +1910,7 @@ function renderAgenda() {
 function renderBarbers() {
   const container = document.getElementById('barber-list');
   // Mostra indicador de limite no topo da lista
-  const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 3;
+  const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 1;
   const atual = state.barbers.length;
   const limiteTexto = limite >= 99 ? 'Ilimitado' : limite;
   const atingido = limite < 99 && atual >= limite;
@@ -1959,7 +1967,7 @@ function renderBarbers() {
 
 function openBarberModal() {
   // Verifica limite de barbeiros definido pelo administrador
-  const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 3;
+  const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 1;
   const atual = state.barbers.length;
   if (atual >= limite && limite < 99) {
     showToast(`🚫 Limite de ${limite} barbeiro(s) atingido. Contate o administrador para ampliar.`, 'error');
@@ -2012,7 +2020,7 @@ async function saveBarber() {
   const photo_url = document.getElementById('barber-photo-url').value || '';
   // ── Verificação dupla de limite (proteção extra além da checagem no openBarberModal) ──
   if (!editId) {
-    const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 3;
+    const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 1;
     if (limite < 99 && state.barbers.length >= limite) {
       showToast(`🚫 Limite de ${limite} barbeiro(s) atingido. Contate o administrador.`, 'error');
       return;
@@ -2284,7 +2292,7 @@ async function saveUser() {
     const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
-      body: JSON.stringify({ name, slug, email, password: pass, mp_token: mpToken || null, max_barbers: parseInt(document.getElementById('user-max-barbers-input').value) || 3 })
+      body: JSON.stringify({ name, slug, email, password: pass, mp_token: mpToken || null, max_barbers: parseInt(document.getElementById('user-max-barbers-input').value) || 1 })
     });
     if (!resp.ok) {
       // Sem fallback direto — senha nunca deve ser salva em texto puro sem Edge Function
@@ -3350,9 +3358,9 @@ function _renderAdminList(term) {
           <span class="slug-tag">?b=${u.slug}</span>
           <span class="user-badge ${u.status === 'blocked' ? 'blocked' : 'user'}" style="margin-left:0.3rem">${u.status === 'blocked' ? 'BLOQUEADA' : 'ATIVA'}</span>
           <span style="font-size:0.65rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:20px;margin-left:0.3rem;display:inline-block;
-            background:${(u.max_barbers||3)>=99?'#E8F5E9':(u.max_barbers||3)>=5?'#E3F2FD':'#FFF8E1'};
-            color:${(u.max_barbers||3)>=99?'#2E7D32':(u.max_barbers||3)>=5?'var(--blue)':'#5D4037'}">
-            💈 ${(u.max_barbers||3)>=99?'Ilimitado':(u.max_barbers||3)+' barbeiro(s)'}
+            background:${(u.max_barbers||1)>=8?'#E8F5E9':(u.max_barbers||1)>=4?'#E3F2FD':'#FFF8E1'};
+            color:${(u.max_barbers||1)>=8?'#2E7D32':(u.max_barbers||1)>=4?'var(--blue)':'#5D4037'}">
+            💈 ${(u.max_barbers||1)+' barbeiro(s)'}
           </span>
         </div>
         <div class="user-actions">
@@ -3375,7 +3383,7 @@ function editUser(id) {
   document.getElementById('edit-shop-pass').value = '';
   document.getElementById('edit-shop-slug').value = u.slug;
   document.getElementById('edit-shop-status').value = u.status || 'active';
-  document.getElementById('edit-shop-max-barbers').value = u.max_barbers || 3;
+  document.getElementById('edit-shop-max-barbers').value = u.max_barbers || 1;
   document.getElementById('edit-shop-mp-token').value = '';
   openModal('modal-edit-shop');
 }
@@ -3390,7 +3398,7 @@ async function saveEditShop() {
   const mpToken = document.getElementById('edit-shop-mp-token').value.trim();
   if (!name || !phone || !slug) { showToast('Preencha nome, telefone e slug!','error'); return; }
   showLoading(true);
-  const max_barbers = parseInt(document.getElementById('edit-shop-max-barbers').value) || 3;
+  const max_barbers = parseInt(document.getElementById('edit-shop-max-barbers').value) || 1;
   const updates = { name, email: phone, slug, status, max_barbers };
   if (pass) updates.password_hash = pass;
   // mp_token nunca vai no fallback direto — apenas via Edge Function
