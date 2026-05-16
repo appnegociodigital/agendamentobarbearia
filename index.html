@@ -896,6 +896,18 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
       <input type="text" id="user-mp-token-input" placeholder="APP_USR-... (opcional)" style="font-size:0.8rem">
       <small style="font-size:0.72rem;color:var(--gray-mid)">Obtenha em developers.mercadopago.com → Credenciais de produção → Access Token</small>
     </div>
+    <div class="form-group">
+      <label>💈 Limite de Barbeiros</label>
+      <select id="user-max-barbers-input">
+        <option value="1">1 barbeiro</option>
+        <option value="2">2 barbeiros</option>
+        <option value="3" selected>3 barbeiros</option>
+        <option value="5">5 barbeiros</option>
+        <option value="10">10 barbeiros</option>
+        <option value="99">Ilimitado</option>
+      </select>
+      <small style="font-size:0.72rem;color:var(--gray-mid)">Máximo de barbeiros que esta barbearia pode cadastrar</small>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('modal-add-user')">Cancelar</button>
       <button class="btn-primary" onclick="saveUser()">SALVAR</button>
@@ -922,6 +934,17 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
       <label>🔑 Token Mercado Pago</label>
       <input type="text" id="edit-shop-mp-token" placeholder="APP_USR-... (deixe em branco para não alterar)" style="font-size:0.8rem">
       <small style="font-size:0.72rem;color:var(--gray-mid)">Obtenha em developers.mercadopago.com → Credenciais de produção → Access Token</small>
+    </div>
+    <div class="form-group">
+      <label>💈 Limite de Barbeiros</label>
+      <select id="edit-shop-max-barbers">
+        <option value="1">1 barbeiro</option>
+        <option value="2">2 barbeiros</option>
+        <option value="3">3 barbeiros</option>
+        <option value="5">5 barbeiros</option>
+        <option value="10">10 barbeiros</option>
+        <option value="99">Ilimitado</option>
+      </select>
     </div>
     <div class="form-group">
       <label>Status</label>
@@ -1878,6 +1901,41 @@ function renderAgenda() {
 // =====================================================
 function renderBarbers() {
   const container = document.getElementById('barber-list');
+  // Mostra indicador de limite no topo da lista
+  const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 3;
+  const atual = state.barbers.length;
+  const limiteTexto = limite >= 99 ? 'Ilimitado' : limite;
+  const atingido = limite < 99 && atual >= limite;
+  const quaseNoLimite = limite < 99 && !atingido && atual >= limite - 1;
+  const addBtn = document.querySelector('#tab-barbeiros .add-btn');
+  if (addBtn) {
+    addBtn.innerHTML = atingido
+      ? `🚫 Limite atingido (${atual}/${limiteTexto})`
+      : `+ Adicionar Barbeiro (${atual}/${limiteTexto})`;
+    addBtn.disabled = atingido;
+    addBtn.style.opacity = atingido ? '0.55' : '1';
+    addBtn.style.cursor = atingido ? 'not-allowed' : 'pointer';
+    addBtn.style.background = atingido ? 'var(--gray-mid)' : quaseNoLimite ? 'var(--gold)' : 'var(--red)';
+  }
+  // Banner de aviso abaixo do botão
+  let banner = document.getElementById('barber-limit-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'barber-limit-banner';
+    const addBtnRow = document.querySelector('#tab-barbeiros > div[style]');
+    if (addBtnRow) addBtnRow.appendChild(banner);
+  }
+  if (atingido) {
+    banner.innerHTML = `<div style="margin-top:0.5rem;background:#FFEBEE;border-left:4px solid var(--red);border-radius:6px;padding:0.6rem 0.85rem;font-size:0.78rem;color:var(--red);font-weight:600">
+      🚫 Limite de ${limiteTexto} barbeiro(s) atingido. Entre em contato com o administrador para ampliar o plano.
+    </div>`;
+  } else if (quaseNoLimite) {
+    banner.innerHTML = `<div style="margin-top:0.5rem;background:#FFF8E1;border-left:4px solid var(--gold);border-radius:6px;padding:0.6rem 0.85rem;font-size:0.78rem;color:#5D4037;font-weight:600">
+      ⚠️ Você está próximo do limite (${atual}/${limiteTexto} barbeiros).
+    </div>`;
+  } else {
+    banner.innerHTML = '';
+  }
   if (state.barbers.length === 0) { container.innerHTML = '<div class="empty-state">Nenhum barbeiro cadastrado</div>'; return; }
   container.innerHTML = state.barbers.map(b => {
     const initials = sanitize(b.name).split(' ').map(n => n[0]).join('').substring(0, 2);
@@ -1900,6 +1958,13 @@ function renderBarbers() {
 }
 
 function openBarberModal() {
+  // Verifica limite de barbeiros definido pelo administrador
+  const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 3;
+  const atual = state.barbers.length;
+  if (atual >= limite && limite < 99) {
+    showToast(`🚫 Limite de ${limite} barbeiro(s) atingido. Contate o administrador para ampliar.`, 'error');
+    return;
+  }
   document.getElementById('modal-barber-title').textContent = 'NOVO BARBEIRO';
   document.getElementById('barber-edit-id').value = '';
   document.getElementById('barber-name-input').value = '';
@@ -1945,6 +2010,14 @@ async function saveBarber() {
   if (!name) { showToast('Informe o nome!', 'error'); return; }
   const editId = document.getElementById('barber-edit-id').value;
   const photo_url = document.getElementById('barber-photo-url').value || '';
+  // ── Verificação dupla de limite (proteção extra além da checagem no openBarberModal) ──
+  if (!editId) {
+    const limite = currentShop && currentShop.max_barbers ? parseInt(currentShop.max_barbers) : 3;
+    if (limite < 99 && state.barbers.length >= limite) {
+      showToast(`🚫 Limite de ${limite} barbeiro(s) atingido. Contate o administrador.`, 'error');
+      return;
+    }
+  }
   showLoading(true);
   try {
     let result;
@@ -2211,7 +2284,7 @@ async function saveUser() {
     const resp = await fetch(SUPABASE_URL_CFG + '/functions/v1/admin-update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY_CFG, 'Authorization': 'Bearer ' + SUPABASE_KEY_CFG },
-      body: JSON.stringify({ name, slug, email, password: pass, mp_token: mpToken || null })
+      body: JSON.stringify({ name, slug, email, password: pass, mp_token: mpToken || null, max_barbers: parseInt(document.getElementById('user-max-barbers-input').value) || 3 })
     });
     if (!resp.ok) {
       // Sem fallback direto — senha nunca deve ser salva em texto puro sem Edge Function
@@ -2231,6 +2304,7 @@ async function saveUser() {
   document.getElementById('user-email-input').value = '';
   document.getElementById('user-pass-input').value = '';
   document.getElementById('user-mp-token-input').value = '';
+  document.getElementById('user-max-barbers-input').value = '3';
   await renderAdminUsers();
   showToast('Barbearia criada com sucesso!', 'success');
 }
@@ -3244,7 +3318,7 @@ let _adminUsers = [];
 async function renderAdminUsers() {
   showLoading(true);
   // Admin: não traz password_hash nem mp_token nas listagens
-  const { data: users } = await db.from('barbershops').select('id,name,slug,email,role,status,address,deposit_value,pix_key,block_credit,created_at').order('created_at');
+  const { data: users } = await db.from('barbershops').select('id,name,slug,email,role,status,address,deposit_value,pix_key,block_credit,max_barbers,created_at').order('created_at');
   showLoading(false);
   _adminUsers = users || [];
   // Mantém o texto de busca atual ao recarregar
@@ -3275,6 +3349,11 @@ function _renderAdminList(term) {
           <div class="user-meta" style="font-size:0.72rem;color:var(--gray-mid)">${u.address || ''}</div>
           <span class="slug-tag">?b=${u.slug}</span>
           <span class="user-badge ${u.status === 'blocked' ? 'blocked' : 'user'}" style="margin-left:0.3rem">${u.status === 'blocked' ? 'BLOQUEADA' : 'ATIVA'}</span>
+          <span style="font-size:0.65rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:20px;margin-left:0.3rem;display:inline-block;
+            background:${(u.max_barbers||3)>=99?'#E8F5E9':(u.max_barbers||3)>=5?'#E3F2FD':'#FFF8E1'};
+            color:${(u.max_barbers||3)>=99?'#2E7D32':(u.max_barbers||3)>=5?'var(--blue)':'#5D4037'}">
+            💈 ${(u.max_barbers||3)>=99?'Ilimitado':(u.max_barbers||3)+' barbeiro(s)'}
+          </span>
         </div>
         <div class="user-actions">
           <button class="btn-small" style="background:var(--blue-mid);color:white;font-size:0.68rem;padding:0.3rem 0.6rem" onclick="editUser('${u.id}')">&#x270F;&#xFE0F; Editar</button>
@@ -3296,6 +3375,7 @@ function editUser(id) {
   document.getElementById('edit-shop-pass').value = '';
   document.getElementById('edit-shop-slug').value = u.slug;
   document.getElementById('edit-shop-status').value = u.status || 'active';
+  document.getElementById('edit-shop-max-barbers').value = u.max_barbers || 3;
   document.getElementById('edit-shop-mp-token').value = '';
   openModal('modal-edit-shop');
 }
@@ -3310,10 +3390,12 @@ async function saveEditShop() {
   const mpToken = document.getElementById('edit-shop-mp-token').value.trim();
   if (!name || !phone || !slug) { showToast('Preencha nome, telefone e slug!','error'); return; }
   showLoading(true);
-  const updates = { name, email: phone, slug, status };
+  const max_barbers = parseInt(document.getElementById('edit-shop-max-barbers').value) || 3;
+  const updates = { name, email: phone, slug, status, max_barbers };
   if (pass) updates.password_hash = pass;
   // mp_token nunca vai no fallback direto — apenas via Edge Function
-  const safeUpdates = { name, email: phone, slug, status };
+  // max_barbers é dado não-sensível e pode ir direto ao banco
+  const safeUpdates = { name, email: phone, slug, status, max_barbers };
   if (pass) safeUpdates.password_hash = pass;
   try {
     // Tenta via Edge Function admin-update (service_role, bypassa RLS)
@@ -3341,9 +3423,6 @@ async function saveEditShop() {
   await renderAdminUsers();
   showToast('✅ Barbearia atualizada com sucesso!','success');
 }
-
-// =====================================================
-//  WHATSAPP BUSINESS API (Meta Cloud API)
 // =====================================================
 
 // Carrega configuração WABA no painel
