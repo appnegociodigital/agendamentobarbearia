@@ -366,8 +366,8 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
 <div class="screen" id="login-screen">
   <div class="login-logo">
     <div class="scissors-icon">✂️</div>
-    <h1>BARBER SYSTEM</h1>
-    <p>GESTÃO DE BARBEARIA</p>
+    <h1>GESTÃO DE BARBEARIA</h1>
+    <p>SISTEMA DE AGENDAMENTO</p>
   </div>
   <div class="login-box">
     <h2>ENTRAR NO SISTEMA</h2>
@@ -636,64 +636,7 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
         <div id="email-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
       </div>
 
-      <!-- NOTIFICAÇÃO PUSH (VAPID — sem Firebase) -->
-      <div class="card" id="card-push-config">
-        <div class="card-header">
-          <span class="card-title">🔔 NOTIFICAÇÃO PUSH</span>
-          <span id="push-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
-        </div>
-        <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
-          Envie lembretes no celular do cliente <b>gratuitamente, sem Firebase e sem limites</b>.<br>
-          Funciona 100% via Supabase — gere suas chaves VAPID com o comando abaixo (apenas uma vez):
-        </div>
-        <div style="background:#1e1e1e;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;font-family:monospace;font-size:0.78rem;color:#4FC3F7">
-          npx web-push generate-vapid-keys
-        </div>
-        <div class="form-group">
-          <label>🔑 VAPID Public Key</label>
-          <input type="text" id="vapid-public-key" placeholder="BNxxxxxxxxxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Chave pública gerada pelo comando acima — vai no frontend e no Supabase</small>
-        </div>
-        <div class="form-group">
-          <label>🔒 VAPID Private Key</label>
-          <input type="password" id="vapid-private-key" placeholder="xxxxxxxxxxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Chave privada — salva apenas como variável de ambiente no Supabase (nunca exposta)</small>
-        </div>
-        <div class="form-group">
-          <label>📧 E-mail de contato VAPID</label>
-          <input type="email" id="vapid-email" placeholder="contato@suabarbearia.com" style="font-size:0.8rem">
-          <small style="font-size:0.72rem;color:var(--gray-mid)">Exigido pelo protocolo Web Push — não será exibido ao cliente</small>
-        </div>
-        <button class="btn-primary" onclick="savePushConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
-        <div id="push-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
-      </div>
-
-      <!-- WHATSAPP BUSINESS API (legado) -->
-      <div class="card" id="card-waba" style="opacity:0.7">
-        <div class="card-header">
-          <span class="card-title">📲 WHATSAPP BUSINESS API <span style="font-size:0.65rem;background:#FFF3E0;color:#E65100;padding:0.15rem 0.5rem;border-radius:20px;margin-left:0.4rem">LEGADO</span></span>
-          <span id="waba-status-badge" style="font-size:0.65rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;background:#E8F5E9;color:#2E7D32;display:none">✅ ATIVO</span>
-        </div>
-        <div style="font-size:0.75rem;color:var(--gray-mid);margin-bottom:1rem;line-height:1.5">
-          Configuração antiga via Meta. Recomendamos usar <b>E-mail + Push</b> acima (gratuitos e sem burocracia).<br>
-          <span style="color:var(--blue);font-weight:600">Obtenha em:</span> developers.facebook.com → Meus Apps → WhatsApp → Configuração
-        </div>
-        <div class="form-group">
-          <label>📱 Número WhatsApp Business (com DDI)</label>
-          <input type="tel" id="waba-phone-id" placeholder="Ex: 5585999990000" style="font-size:0.85rem">
-        </div>
-        <div class="form-group">
-          <label>🆔 Phone Number ID (do painel Meta)</label>
-          <input type="text" id="waba-phone-number-id" placeholder="Ex: 123456789012345" style="font-size:0.85rem">
-        </div>
-        <div class="form-group">
-          <label>🔑 Token de Acesso Permanente</label>
-          <input type="text" id="waba-token" placeholder="EAAxxxxxxxxxxxxxxx..." style="font-size:0.8rem">
-        </div>
-        <button class="btn-primary" onclick="saveWabaConfig()" style="width:100%;margin-top:0.5rem">💾 SALVAR CONFIGURAÇÃO</button>
-        <button class="btn-secondary" onclick="testWabaConfig()" style="width:100%;margin-top:0.5rem" id="btn-test-waba">📨 ENVIAR MENSAGEM DE TESTE</button>
-        <div id="waba-config-status" style="font-size:0.75rem;margin-top:0.5rem;text-align:center"></div>
-      </div>
+      <!-- WHATSAPP BUSINESS API removido -->
 
       <!-- ALTERAR SENHA -->
       <div class="card">
@@ -738,16 +681,14 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
       <div class="step-title"><div class="step-num">1</div> SEUS DADOS</div>
       <div class="form-group"><label>Seu Nome *</label><input type="text" id="client-name" placeholder="Como você se chama?"></div>
       <div class="form-group"><label>WhatsApp *</label><input type="tel" id="client-whatsapp" placeholder="(85) 99999-9999" oninput="checkExistingBooking(this.value)"></div>
-      <div class="form-group"><label>E-mail <span style="font-weight:400;color:var(--gray-mid)">(para confirmação)</span></label><input type="email" id="client-email" placeholder="seu@email.com"></div>
-      <div id="push-permission-box" style="background:#E8F0FC;border-radius:10px;padding:0.85rem 1rem;margin-bottom:0.5rem;display:flex;align-items:center;gap:0.75rem">
-        <span style="font-size:1.4rem">🔔</span>
-        <div style="flex:1">
-          <div style="font-size:0.8rem;font-weight:700;color:var(--blue)">Receber lembretes no celular?</div>
-          <div style="font-size:0.72rem;color:var(--gray-mid);margin-top:0.1rem">Ative para receber notificações de confirmação e lembrete</div>
+      <div class="form-group">
+        <label>E-mail <span style="font-weight:400;color:var(--gray-mid)">(para confirmação)</span></label>
+        <input type="email" id="client-email" placeholder="seu@email.com">
+        <div style="background:#E8F0FC;border-radius:8px;padding:0.6rem 0.85rem;margin-top:0.4rem;font-size:0.75rem;color:var(--blue-mid);display:flex;align-items:center;gap:0.5rem">
+          <span>📧</span>
+          <span>Informe seu e-mail para receber a confirmação do agendamento</span>
         </div>
-        <button onclick="ativarPushCliente()" id="btn-ativar-push" style="background:var(--blue);color:white;border:none;border-radius:8px;padding:0.45rem 0.75rem;font-size:0.75rem;font-weight:700;cursor:pointer;white-space:nowrap">ATIVAR</button>
       </div>
-      <div id="push-ativo-box" style="display:none;background:#E8F5E9;border-radius:10px;padding:0.6rem 1rem;margin-bottom:0.5rem;font-size:0.8rem;color:#2E7D32;font-weight:600">✅ Notificações ativadas!</div>
       <div id="reagend-card-box" style="display:none" class="reagend-card">
         <h4>AGENDAMENTO ENCONTRADO</h4>
         <div class="reagend-info" id="reagend-card-info"></div>
