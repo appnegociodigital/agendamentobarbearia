@@ -512,14 +512,7 @@ body { font-family: var(--font-body); background: var(--off-white); min-height: 
           <button class="btn-small" style="background:#128C7E;color:white;padding:0.45rem 0.85rem;font-size:0.8rem" onclick="sendBulkWhatsApp('tomorrow')">📅 Amanhã (em lote)</button>
         </div>
       </div>
-      <div id="card-bulk-email" class="card" style="margin-bottom:0.75rem;background:linear-gradient(135deg,#E8F0FC,#EDE7F6);border-left:4px solid var(--blue);display:none">
-        <div style="font-family:var(--font-title);color:var(--blue);font-size:0.9rem;letter-spacing:1px;margin-bottom:0.6rem">📧 ENVIAR LEMBRETES POR E-MAIL / PUSH</div>
-        <div style="font-size:0.75rem;color:var(--blue-mid);margin-bottom:0.75rem">Envie lembretes automáticos para agendamentos de amanhã (gratuito, sem limites de WhatsApp)</div>
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-          <button class="btn-small" style="background:var(--blue);color:white;padding:0.45rem 0.85rem;font-size:0.8rem" onclick="sendBulkEmail('tomorrow')">📧 Amanhã por e-mail</button>
-          <button class="btn-small" style="background:#5C35C1;color:white;padding:0.45rem 0.85rem;font-size:0.8rem" onclick="sendBulkPush('tomorrow')">🔔 Amanhã por push</button>
-        </div>
-      </div>
+
       <div class="date-tabs" id="date-tabs"></div>
       <div id="agenda-barber-select" style="margin-bottom:1rem;display:none">
         <div class="form-group">
@@ -1757,8 +1750,22 @@ function _startSessionTimer(expiresIn) {
   }, expiresIn);
 }
 
-function _enterSystem(data) {
+async function _enterSystem(data) {
   currentShop = data;
+  // Garante que max_barbers esta carregado — a Edge Function auth-login
+  // pode nao retornar esse campo; buscamos direto do banco para garantir.
+  if (data.role !== 'admin' && (data.max_barbers === undefined || data.max_barbers === null)) {
+    try {
+      const { data: shopExtra } = await db.from('barbershops')
+        .select('max_barbers')
+        .eq('id', data.id)
+        .single();
+      if (shopExtra && shopExtra.max_barbers !== null) {
+        currentShop.max_barbers = shopExtra.max_barbers;
+        data.max_barbers = shopExtra.max_barbers;
+      }
+    } catch(e) {}
+  }
   _saveSession(data);
   _startSessionTimer(_SESSION_TTL);
   if (data.role === 'admin') {
@@ -1787,8 +1794,7 @@ function switchTab(tab) {
   document.getElementById('nav-' + tab).classList.add('active');
   if (tab === 'agenda') {
     renderDateTabs(); renderAgenda();
-    const cardBulkEmail = document.getElementById('card-bulk-email');
-    if (cardBulkEmail) cardBulkEmail.style.display = (currentShop && (currentShop.email_configured || currentShop.push_configured)) ? 'block' : 'none';
+
   }
   if (tab === 'barbeiros') renderBarbers();
   if (tab === 'servicos') renderServices();
@@ -3265,8 +3271,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Restaura sessao sem regravar no sessionStorage (ja esta salvo)
-function _enterSystemRestored(data) {
+async function _enterSystemRestored(data) {
   currentShop = data;
+  // Rebusca max_barbers caso nao esteja na sessao salva (sessoes antigas nao tinham esse campo)
+  if (data.role !== 'admin' && (data.max_barbers === undefined || data.max_barbers === null)) {
+    try {
+      const { data: shopExtra } = await db.from('barbershops')
+        .select('max_barbers')
+        .eq('id', data.id)
+        .single();
+      if (shopExtra && shopExtra.max_barbers !== null) {
+        currentShop.max_barbers = shopExtra.max_barbers;
+      }
+    } catch(e) {}
+  }
   if (data.role === 'admin') {
     showScreen('admin-screen');
     document.getElementById('admin-user-name').textContent = data.name;
