@@ -3660,7 +3660,7 @@ async function testEmailConfig() {
 }
 
 async function sendEmailConfirmacao(bookingData) {
-  if (!clientShopData || !clientShopData.email_configured) return false;
+  if (!clientShopData) return false;
   const email = document.getElementById('client-email') ? document.getElementById('client-email').value.trim() : '';
   if (!email) return false;
   try {
