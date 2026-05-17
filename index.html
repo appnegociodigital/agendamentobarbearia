@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Gestão para Barbearias Modernas</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ══════════════════════════════════════════════════
+     ▌ CONFIGURAÇÃO DE WHATSAPP — edite apenas aqui ▌
+  ══════════════════════════════════════════════════ */
+  /* O número e a mensagem são definidos no <script> no final do arquivo */
+
+  :root {
+    --azul:        #1A3A6B;
+    --azul-mid:    #1E4A8A;
+    --azul-claro:  #2563EB;
+    --azul-suave:  #EFF4FF;
+    --azul-borda:  #BFCFEF;
+    --vermelho:    #CC1A1A;
+    --vermelho-vivo:#E52020;
+    --vermelho-sub:#F5E5E5;
+    --branco:      #FFFFFF;
+    --cinza-bg:    #F7F9FC;
+    --cinza-card:  #EEF2F8;
+    --cinza-borda: #D5DCE8;
+    --cinza-texto: #5A6A82;
+    --cinza-escuro:#2C3A50;
+    --sombra-azul: rgba(26,58,107,.12);
+    --sombra-verm: rgba(204,26,26,.15);
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Barlow', sans-serif;
+    background: var(--branco);
+    color: var(--cinza-escuro);
+    overflow-x: hidden;
+  }
+
+  /* ══ BARBER POLE ══ */
+  .barber-pole {
+    position: absolute;
+    left: 4%;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 220px;
+    border-radius: 13px;
+    background: #e0e4ea;
+    overflow: hidden;
+    box-shadow: 0 0 32px rgba(204,26,26,.25), inset 0 0 8px rgba(0,0,0,.08);
+  }
+  .barber-pole::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--vermelho)   0px, var(--vermelho)   10px,
+      var(--branco)     10px, var(--branco)    20px,
+      var(--azul-claro) 20px, var(--azul-claro) 30px
+    );
+    background-size: 100% 60px;
+    animation: pole-spin 3s linear infinite;
+  }
+  .barber-pole::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255,255,255,.4) 0%, transparent 40%, transparent 60%, rgba(255,255,255,.2) 100%);
+    border-radius: inherit;
+  }
+  @keyframes pole-spin {
+    from { background-position: 0 0; }
+    to   { background-position: 0 60px; }
+  }
+  .barber-pole-right { left: auto; right: 4%; }
+
+  /* ══ HERO ══ */
+  .hero {
+    min-height: 100vh;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: linear-gradient(160deg, #F0F5FF 0%, #E8EFFC 40%, #FDF0F0 100%);
+    border-bottom: 3px solid var(--azul-borda);
+  }
+
+  .hero-scissors-bg {
+    position: absolute;
+    font-size: 420px;
+    opacity: .04;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%) rotate(-15deg);
+    pointer-events: none;
+    user-select: none;
+    color: var(--azul);
+  }
+
+  /* Círculos pulsantes */
+  .pulse-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid rgba(204,26,26,.12);
+    animation: pulse-expand 4s ease-out infinite;
+  }
+  .pulse-ring:nth-child(1) { width: 300px; height: 300px; animation-delay: 0s; }
+  .pulse-ring:nth-child(2) { width: 500px; height: 500px; animation-delay: 1s; }
+  .pulse-ring:nth-child(3) { width: 700px; height: 700px; animation-delay: 2s; }
+  @keyframes pulse-expand {
+    0%   { opacity: .6; transform: scale(.9); }
+    100% { opacity: 0;  transform: scale(1.15); }
+  }
+
+  .hero-diagonal {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%; height: 100px;
+    background: linear-gradient(135deg, var(--vermelho) 0%, #a01010 100%);
+    clip-path: polygon(0 60%, 100% 0%, 100% 100%, 0 100%);
+    z-index: 1;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 0 20px;
+    max-width: 900px;
+  }
+
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(204,26,26,.08);
+    border: 1.5px solid rgba(204,26,26,.25);
+    border-radius: 100px;
+    padding: 6px 20px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--vermelho);
+    margin-bottom: 24px;
+    animation: fade-down .8s ease both;
+  }
+
+  .hero-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(58px, 10vw, 112px);
+    line-height: .92;
+    letter-spacing: 2px;
+    color: var(--azul);
+    animation: fade-up .8s ease .2s both;
+  }
+  .hero-title .red  { color: var(--vermelho); text-shadow: 0 2px 24px rgba(204,26,26,.2); }
+  .hero-title .blue { color: var(--azul-claro); }
+
+  .hero-sub {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--cinza-texto);
+    margin: 20px 0 36px;
+    letter-spacing: .5px;
+    animation: fade-up .8s ease .4s both;
+  }
+
+  .hero-badges {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+    animation: fade-up .8s ease .5s both;
+  }
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--branco);
+    border: 1.5px solid var(--cinza-borda);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cinza-escuro);
+    box-shadow: 0 2px 8px var(--sombra-azul);
+    transition: all .3s;
+  }
+  .badge:hover {
+    border-color: var(--vermelho);
+    background: var(--vermelho-sub);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px var(--sombra-verm);
+  }
+  .badge .ico { font-size: 18px; }
+
+  .hero-cta {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fade-up .8s ease .6s both;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--vermelho);
+    color: var(--branco);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 18px 40px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    transition: all .3s;
+    box-shadow: 0 8px 28px var(--sombra-verm);
+  }
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent);
+    transform: translateX(-100%);
+    transition: transform .5s;
+  }
+  .btn-primary:hover::before { transform: translateX(100%); }
+  .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 14px 40px var(--sombra-verm); background: var(--vermelho-vivo); }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--branco);
+    color: var(--azul);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 18px 40px;
+    border-radius: 6px;
+    border: 2px solid var(--azul-borda);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all .3s;
+    box-shadow: 0 2px 10px var(--sombra-azul);
+  }
+  .btn-secondary:hover { border-color: var(--azul); background: var(--azul-suave); transform: translateY(-3px); }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--cinza-texto);
+    animation: fade-up 1s ease 1.2s both;
+  }
+  .scroll-mouse {
+    width: 22px; height: 36px;
+    border: 2px solid var(--cinza-borda);
+    border-radius: 11px;
+    position: relative;
+  }
+  .scroll-mouse::before {
+    content: '';
+    position: absolute;
+    top: 6px; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 8px;
+    background: var(--vermelho);
+    border-radius: 2px;
+    animation: scroll-down 1.5s ease infinite;
+  }
+  @keyframes scroll-down {
+    0%,100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+    80%      { transform: translateX(-50%) translateY(8px); opacity: 0; }
+  }
+
+  /* ══ TICKER ══ */
+  .ticker-wrap {
+    background: var(--azul);
+    border-top: none;
+    border-bottom: 3px solid var(--vermelho);
+    overflow: hidden;
+    padding: 14px 0;
+    position: relative;
+    z-index: 3;
+  }
+  .ticker-inner {
+    display: flex;
+    gap: 60px;
+    animation: ticker-move 25s linear infinite;
+    white-space: nowrap;
+  }
+  .ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.75);
+    flex-shrink: 0;
+  }
+  .ticker-dot { color: var(--vermelho-vivo); font-size: 18px; line-height: 0; }
+  @keyframes ticker-move {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* ══ STATS STRIP ══ */
+  .stats-strip {
+    background: var(--branco);
+    border-bottom: 1px solid var(--cinza-borda);
+    position: relative;
+    z-index: 3;
+    padding: 32px 0;
+  }
+  .stats-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 40px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .stat-item {
+    text-align: center;
+    padding: 8px 20px;
+    border-right: 1px solid var(--cinza-borda);
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    line-height: 1;
+    color: var(--vermelho);
+  }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--cinza-texto);
+    margin-top: 4px;
+  }
+
+  /* ══ SEÇÃO GENÉRICA ══ */
+  section { position: relative; z-index: 2; }
+
+  .section-label {
+    display: inline-block;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--vermelho);
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(40px, 6vw, 72px);
+    line-height: .95;
+    margin-bottom: 16px;
+    color: var(--azul);
+  }
+  .section-sub {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--cinza-texto);
+    max-width: 540px;
+    line-height: 1.6;
+  }
+
+  /* ══ FUNCIONALIDADES ══ */
+  .features-wrap { background: var(--cinza-bg); border-top: 1px solid var(--cinza-borda); border-bottom: 1px solid var(--cinza-borda); }
+  .features {
+    padding: 100px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .features-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 60px;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .feat-card {
+    background: var(--branco);
+    border: 1.5px solid var(--cinza-borda);
+    border-radius: 14px;
+    padding: 32px 28px;
+    position: relative;
+    transition: all .35s;
+    cursor: default;
+    overflow: hidden;
+  }
+  .feat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: var(--vermelho);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform .35s;
+    border-radius: 4px 0 0 4px;
+  }
+  .feat-card:hover {
+    border-color: var(--azul-borda);
+    box-shadow: 0 12px 40px var(--sombra-azul);
+    transform: translateY(-4px);
+  }
+  .feat-card:hover::after { transform: scaleY(1); }
+
+  .feat-icon {
+    width: 52px; height: 52px;
+    background: var(--azul-suave);
+    border: 1.5px solid var(--azul-borda);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 18px;
+    transition: all .35s;
+  }
+  .feat-card:hover .feat-icon {
+    background: var(--vermelho);
+    border-color: var(--vermelho);
+    box-shadow: 0 6px 20px var(--sombra-verm);
+    transform: scale(1.08);
+  }
+  .feat-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--azul);
+    letter-spacing: .5px;
+  }
+  .feat-desc {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--cinza-texto);
+    line-height: 1.6;
+  }
+  .feat-tag {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--vermelho);
+    border: 1px solid rgba(204,26,26,.3);
+    background: var(--vermelho-sub);
+    padding: 3px 10px;
+    border-radius: 100px;
+  }
+
+  /* ══ POR QUE CONTRATAR ══ */
+  .why {
+    padding: 100px 40px;
+    background: var(--branco);
+    position: relative;
+    overflow: hidden;
+  }
+  .why::before {
+    content: '✂';
+    position: absolute;
+    font-size: 340px;
+    color: var(--azul);
+    opacity: .03;
+    top: 50%; right: -60px;
+    transform: translateY(-50%) rotate(20deg);
+    pointer-events: none;
+    user-select: none;
+  }
+  .why-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 80px;
+    align-items: start;
+  }
+  .why-left { position: sticky; top: 100px; }
+  .why-big-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 200px;
+    line-height: .85;
+    color: rgba(26,58,107,.06);
+    position: absolute;
+    top: -30px; left: -20px;
+    pointer-events: none;
+    user-select: none;
+  }
+  .why-stat-box {
+    margin-top: 40px;
+    background: linear-gradient(135deg, var(--vermelho) 0%, #a01010 100%);
+    border-radius: 14px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    color: var(--branco);
+    box-shadow: 0 16px 48px var(--sombra-verm);
+  }
+  .why-stat-box::before {
+    content: '+35%';
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 100px;
+    position: absolute;
+    right: -10px; top: -10px;
+    opacity: .12;
+    line-height: 1;
+  }
+  .why-stat-box .big { font-family: 'Bebas Neue', sans-serif; font-size: 56px; line-height: 1; }
+  .why-stat-box p { font-size: 13px; font-weight: 400; opacity: .9; margin-top: 6px; line-height: 1.5; }
+
+  .why-right { display: flex; flex-direction: column; gap: 4px; }
+  .why-item {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 24px;
+    align-items: start;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--cinza-borda);
+    transition: all .3s;
+    cursor: default;
+  }
+  .why-item:hover { padding-left: 12px; border-bottom-color: var(--vermelho); }
+  .why-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    color: var(--azul-borda);
+    line-height: 1;
+    transition: color .3s;
+  }
+  .why-item:hover .why-num { color: var(--vermelho); }
+  .why-item-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--azul);
+  }
+  .why-item-desc { font-size: 14px; font-weight: 400; color: var(--cinza-texto); line-height: 1.6; }
+
+  /* ══ PLANOS ══ */
+  .plans {
+    padding: 100px 40px 80px;
+    background: var(--cinza-bg);
+    position: relative;
+    overflow: hidden;
+    border-top: 1px solid var(--cinza-borda);
+  }
+  .plans::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 50%, rgba(37,99,235,.04) 0%, transparent 50%),
+      radial-gradient(circle at 80% 50%, rgba(204,26,26,.04) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .plans-header { text-align: center; max-width: 600px; margin: 0 auto 64px; }
+  .plans-header .section-sub { margin: 0 auto; }
+
+  .plans-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .plan-card {
+    background: var(--branco);
+    border: 1.5px solid var(--cinza-borda);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    transition: all .35s;
+    box-shadow: 0 2px 12px var(--sombra-azul);
+  }
+  .plan-card:hover { transform: translateY(-8px); box-shadow: 0 24px 60px var(--sombra-azul); border-color: var(--azul-borda); }
+  .plan-card.popular {
+    border-color: var(--vermelho);
+    transform: scale(1.04);
+    box-shadow: 0 16px 60px var(--sombra-verm);
+  }
+  .plan-card.popular:hover { transform: scale(1.04) translateY(-8px); }
+
+  .popular-ribbon {
+    background: var(--vermelho);
+    text-align: center;
+    padding: 8px 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--branco);
+  }
+
+  .plan-header {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--cinza-borda);
+    background: var(--azul-suave);
+  }
+  .plan-card.popular .plan-header { background: var(--vermelho-sub); border-bottom-color: rgba(204,26,26,.15); }
+
+  .plan-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--cinza-texto);
+    margin-bottom: 6px;
+  }
+  .plan-barbers {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    color: var(--azul);
+    margin-bottom: 16px;
+  }
+  .plan-price {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px;
+    line-height: 1;
+    color: var(--azul);
+  }
+  .plan-card.popular .plan-price { color: var(--vermelho); }
+  .plan-price .currency {
+    font-size: 22px;
+    vertical-align: top;
+    margin-top: 10px;
+    display: inline-block;
+    color: var(--cinza-texto);
+  }
+  .plan-period { font-size: 12px; color: var(--cinza-texto); margin-top: 4px; }
+
+  .plan-features {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .plan-feat {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--cinza-escuro);
+    line-height: 1.4;
+  }
+  .plan-feat .check {
+    width: 18px; height: 18px; min-width: 18px;
+    background: rgba(26,58,107,.08);
+    border: 1.5px solid rgba(26,58,107,.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--azul);
+    margin-top: 1px;
+  }
+  .plan-card.popular .plan-feat .check {
+    background: rgba(204,26,26,.1);
+    border-color: rgba(204,26,26,.3);
+    color: var(--vermelho);
+  }
+
+  .plan-cta { padding: 0 24px 28px; }
+  .plan-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 14px;
+    border-radius: 8px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: all .3s;
+  }
+  .plan-btn-outline {
+    background: transparent;
+    border: 2px solid var(--azul-borda);
+    color: var(--azul);
+  }
+  .plan-btn-outline:hover { border-color: var(--azul); background: var(--azul-suave); }
+  .plan-btn-solid {
+    background: var(--vermelho);
+    color: var(--branco);
+    box-shadow: 0 8px 24px var(--sombra-verm);
+  }
+  .plan-btn-solid:hover { background: var(--vermelho-vivo); box-shadow: 0 12px 32px var(--sombra-verm); transform: translateY(-2px); }
+
+  .plans-guarantee {
+    max-width: 1100px;
+    margin: 40px auto 0;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  .guarantee-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cinza-texto);
+  }
+  .guarantee-item .ico { color: #16a34a; font-size: 16px; }
+
+  /* ══ CTA FINAL ══ */
+  .cta-final {
+    padding: 100px 40px;
+    background: linear-gradient(135deg, var(--azul) 0%, #0f2348 100%);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+  }
+  .cta-final::before {
+    content: '✂';
+    position: absolute;
+    font-size: 400px;
+    opacity: .04;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%) rotate(-20deg);
+    pointer-events: none;
+    user-select: none;
+    color: var(--branco);
+  }
+  .cta-final-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .cta-final .section-title { font-size: clamp(48px, 8vw, 88px); color: var(--branco); }
+  .cta-final .section-sub { margin: 0 auto 40px; font-size: 18px; color: rgba(255,255,255,.7); }
+  .cta-final .section-label { color: rgba(255,255,255,.5); }
+
+  /* Steps */
+  .steps {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin: 60px 0;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 120px;
+    position: relative;
+    padding: 0 10px;
+  }
+  .step::after {
+    content: '';
+    position: absolute;
+    top: 24px; right: -10px;
+    width: 20px; height: 2px;
+    background: rgba(255,255,255,.2);
+  }
+  .step:last-child::after { display: none; }
+  .step-num {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: var(--vermelho);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    color: var(--branco);
+    box-shadow: 0 0 24px rgba(204,26,26,.5);
+  }
+  .step-ico { font-size: 24px; }
+  .step-label {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    color: rgba(255,255,255,.8);
+    line-height: 1.4;
+  }
+
+  /* WhatsApp card */
+  .wpp-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    background: #16A34A;
+    border-radius: 12px;
+    padding: 20px 36px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all .3s;
+    text-decoration: none;
+    color: var(--branco);
+    box-shadow: 0 16px 48px rgba(22,163,74,.4);
+    position: relative;
+    overflow: hidden;
+  }
+  .wpp-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+    transform: translateX(-100%);
+    transition: transform .6s;
+  }
+  .wpp-card:hover::before { transform: translateX(100%); }
+  .wpp-card:hover { transform: translateY(-4px); box-shadow: 0 24px 60px rgba(22,163,74,.5); }
+  .wpp-icon {
+    width: 44px; height: 44px;
+    background: rgba(255,255,255,.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+  }
+
+  /* ══ DIVISOR DE SEÇÃO ══ */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 200px;
+    margin: 16px 0 20px;
+  }
+  .section-divider .line {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, var(--vermelho), transparent);
+  }
+  .section-divider .scissors { color: var(--vermelho); font-size: 18px; }
+
+  /* ══ FOOTER ══ */
+  footer {
+    background: var(--cinza-escuro);
+    padding: 24px 40px;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255,255,255,.4);
+    border-top: 3px solid var(--vermelho);
+  }
+
+  /* ══ ANIMATIONS ══ */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-down {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ══ MEDIA ══ */
+  @media (max-width: 900px) {
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .plans-grid { grid-template-columns: repeat(2, 1fr); }
+    .why-inner { grid-template-columns: 1fr; gap: 40px; }
+    .why-left { position: static; }
+    .stats-inner { grid-template-columns: repeat(2, 1fr); }
+    .barber-pole { display: none; }
+    .plan-card.popular { transform: none; }
+  }
+  @media (max-width: 600px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .plans-grid { grid-template-columns: 1fr; }
+    .stats-inner { grid-template-columns: repeat(2, 1fr); }
+    .features, .why, .plans, .cta-final { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ HERO ══════════════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="barber-pole"></div>
+  <div class="barber-pole barber-pole-right"></div>
+  <div class="hero-scissors-bg">✂</div>
+
+  <div class="pulse-ring" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)"></div>
+  <div class="pulse-ring" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)"></div>
+  <div class="pulse-ring" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)"></div>
+
+  <div class="hero-content">
+    <div class="hero-eyebrow">
+      <span>✂</span> Proposta Comercial <span>✂</span>
+    </div>
+
+    <h1 class="hero-title">
+      SISTEMA DE GESTÃO<br>
+      PARA <span class="red">BARBEARIAS</span><br>
+      <span class="blue">MODERNAS</span>
+    </h1>
+
+    <p class="hero-sub">
+      Agendamento 24h &nbsp;·&nbsp; PIX Automático &nbsp;·&nbsp; Gestão de Equipe &nbsp;·&nbsp; App Mobile
+    </p>
+
+    <div class="hero-badges">
+      <div class="badge"><span class="ico">📱</span> App Instalável</div>
+      <div class="badge"><span class="ico">💳</span> PIX Automático</div>
+      <div class="badge"><span class="ico">💬</span> WhatsApp Bot</div>
+      <div class="badge"><span class="ico">🔒</span> 100% Seguro</div>
+    </div>
+
+    <div class="hero-cta">
+      <a href="#planos" class="btn-primary">✂ Ver Planos e Preços</a>
+      <a href="#funcionalidades" class="btn-secondary">Como funciona →</a>
+    </div>
+  </div>
+
+  <div class="scroll-hint">
+    <div class="scroll-mouse"></div>
+    <span>scroll</span>
+  </div>
+
+  <div class="hero-diagonal"></div>
+</section>
+
+<!-- ══ TICKER ════════════════════════════════════════════════════════════════ -->
+<div class="ticker-wrap">
+  <div class="ticker-inner">
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Agendamento Online 24h</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Sem Conflito de Horários</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> PIX Automático Integrado</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Notificações WhatsApp</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> App Instalável no Celular</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Sem Contrato de Fidelidade</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Suporte em Português</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Configuração em 24h</span>
+    <!-- duplicata para loop contínuo -->
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Agendamento Online 24h</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Sem Conflito de Horários</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> PIX Automático Integrado</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Notificações WhatsApp</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> App Instalável no Celular</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Sem Contrato de Fidelidade</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Suporte em Português</span>
+    <span class="ticker-item"><span class="ticker-dot">✂</span> Configuração em 24h</span>
+  </div>
+</div>
+
+<!-- ══ STATS ═════════════════════════════════════════════════════════════════ -->
+<div class="stats-strip">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <div class="stat-num" data-count="35" data-suffix="%">0%</div>
+      <div class="stat-label">mais faturamento</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">24h</div>
+      <div class="stat-label">Agendamento aberto</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">0</div>
+      <div class="stat-label">No-shows com PIX sinal</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">24h</div>
+      <div class="stat-label">Para estar no ar</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FUNCIONALIDADES ═══════════════════════════════════════════════════════ -->
+<div id="funcionalidades" class="features-wrap">
+<div class="features">
+  <div class="features-header reveal">
+    <div>
+      <span class="section-label">✂ Funcionalidades</span>
+      <div class="section-divider"><div class="line"></div><span class="scissors">✂</span></div>
+      <h2 class="section-title">TUDO QUE<br>SUA BARBEARIA<br>PRECISA</h2>
+    </div>
+    <p class="section-sub">
+      Um sistema completo pensado para quem vive de corte e não tem tempo a perder com desorganização.
+    </p>
+  </div>
+
+  <div class="features-grid">
+    <div class="feat-card reveal">
+      <div class="feat-icon">📅</div>
+      <div class="feat-title">Agendamento Online 24h</div>
+      <div class="feat-desc">Clientes marcam horário pelo celular a qualquer hora do dia ou da noite, sem precisar te ligar ou mandar mensagem.</div>
+      <span class="feat-tag">Principal</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">💳</div>
+      <div class="feat-title">PIX Automático</div>
+      <div class="feat-desc">Cobrança de sinal via PIX integrada ao sistema. A confirmação do pagamento é automática — sem trabalho manual.</div>
+      <span class="feat-tag">Anti No-Show</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">👥</div>
+      <div class="feat-title">Gestão de Barbeiros</div>
+      <div class="feat-desc">Cada barbeiro tem sua própria agenda, horários e serviços. Sem conflito de horário, sem bagunça na equipe.</div>
+      <span class="feat-tag">Equipe</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">📱</div>
+      <div class="feat-title">App Instalável (PWA)</div>
+      <div class="feat-desc">Funciona como aplicativo direto no celular do cliente, sem precisar baixar nada da Play Store ou App Store.</div>
+      <span class="feat-tag">Mobile First</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">🎛️</div>
+      <div class="feat-title">Painel de Controle</div>
+      <div class="feat-desc">Acompanhe todos os agendamentos em tempo real, cancele, reorganize e gerencie sua barbearia de qualquer lugar.</div>
+      <span class="feat-tag">Gestão</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">💬</div>
+      <div class="feat-title">Notificações WhatsApp</div>
+      <div class="feat-desc">Confirmações automáticas enviadas ao cliente via WhatsApp assim que o agendamento é feito. Zero trabalho manual.</div>
+      <span class="feat-tag">Automação</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">🔒</div>
+      <div class="feat-title">Segurança de Dados</div>
+      <div class="feat-desc">Dados criptografados, acesso protegido por senha e controle total sobre as informações da sua barbearia.</div>
+      <span class="feat-tag">Proteção</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">🚫</div>
+      <div class="feat-title">Bloqueio de Horários</div>
+      <div class="feat-desc">Bloqueie folgas, feriados ou períodos específicos em segundos. Ninguém agenda no seu dia de descanso.</div>
+      <span class="feat-tag">Controle</span>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">⚡</div>
+      <div class="feat-title">Rápido e Responsivo</div>
+      <div class="feat-desc">Carrega rápido mesmo em conexões lentas e funciona perfeitamente em qualquer celular, sem travar.</div>
+      <span class="feat-tag">Performance</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ POR QUE CONTRATAR ═════════════════════════════════════════════════════ -->
+<div class="why">
+  <div class="why-inner">
+    <div class="why-left reveal">
+      <div style="position:relative;">
+        <div class="why-big-num">5</div>
+        <span class="section-label">✂ Por que contratar</span>
+        <div class="section-divider"><div class="line"></div><span class="scissors">✂</span></div>
+        <h2 class="section-title" style="position:relative;z-index:1;">CHEGA DE<br>PERDER<br><span style="color:var(--vermelho)">DINHEIRO</span></h2>
+      </div>
+      <div class="why-stat-box">
+        <div class="big">+35%</div>
+        <p>Barbearias com sistema próprio faturam até 35% mais do que a concorrência sem organização digital.</p>
+      </div>
+    </div>
+
+    <div class="why-right">
+      <div class="why-item reveal">
+        <div class="why-num">01</div>
+        <div>
+          <div class="why-item-title">✂ Fim dos furos de agenda</div>
+          <div class="why-item-desc">O sistema controla automaticamente os horários disponíveis. Sem conflito, sem cliente chegando na hora errada, sem confusão na agenda.</div>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-num">02</div>
+        <div>
+          <div class="why-item-title">💳 Receba antes de atender</div>
+          <div class="why-item-desc">Com o PIX de sinal obrigatório, você elimina os "no-shows" — cada furo na agenda é dinheiro que vai direto para o seu bolso.</div>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-num">03</div>
+        <div>
+          <div class="why-item-title">📲 Clientes agendam sozinhos</div>
+          <div class="why-item-desc">Pare de responder WhatsApp para marcar horário. O cliente acessa, escolhe o barbeiro e confirma em segundos — 24 horas por dia.</div>
+        </div>
+      </div>
+      <div class="why-item reveal">
+        <div class="why-num">04</div>
+        <div>
+          <div class="why-item-title">📊 Controle profissional do negócio</div>
+          <div class="why-item-desc">Veja agendamentos, gerencie equipe e tome decisões com dados reais — não em achismo. Sabe exatamente o que está acontecendo.</div>
+        </div>
+      </div>
+      <div class="why-item reveal" style="border-bottom:none;">
+        <div class="why-num">05</div>
+        <div>
+          <div class="why-item-title">🏆 Imagem profissional no mercado</div>
+          <div class="why-item-desc">Um sistema próprio diferencia sua barbearia da concorrência e transmite profissionalismo e confiança para os clientes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PLANOS ═════════════════════════════════════════════════════════════════ -->
+<div id="planos" class="plans">
+  <div class="plans-header reveal">
+    <span class="section-label">✂ Planos e Preços</span>
+    <div class="section-divider" style="margin:16px auto 20px;"><div class="line"></div><span class="scissors">✂</span></div>
+    <h2 class="section-title">ESCOLHA SEU<br>PLANO IDEAL</h2>
+    <p class="section-sub">Mensais, sem contrato de fidelidade. Cancele quando quiser, sem burocracia.</p>
+  </div>
+
+  <div class="plans-grid">
+
+    <!-- SOLO -->
+    <div class="plan-card reveal">
+      <div class="plan-header">
+        <div class="plan-name">Solo</div>
+        <div class="plan-barbers">✂ 1 Barbeiro</div>
+        <div class="plan-price">
+          <span class="currency">R$</span>39<span style="font-size:32px">,99</span>
+        </div>
+        <div class="plan-period">por mês</div>
+      </div>
+      <div class="plan-features">
+        <div class="plan-feat"><span class="check">✓</span> Agendamento online 24h</div>
+        <div class="plan-feat"><span class="check">✓</span> Pagamento PIX integrado</div>
+        <div class="plan-feat"><span class="check">✓</span> Painel de controle</div>
+        <div class="plan-feat"><span class="check">✓</span> App instalável (PWA)</div>
+        <div class="plan-feat"><span class="check">✓</span> Notificações WhatsApp</div>
+        <div class="plan-feat"><span class="check">✓</span> Bloqueio de horários</div>
+        <div class="plan-feat"><span class="check">✓</span> Suporte via WhatsApp</div>
+      </div>
+      <div class="plan-cta">
+        <a href="#contato" class="plan-btn plan-btn-outline">Contratar →</a>
+      </div>
+    </div>
+
+    <!-- BÁSICO -->
+    <div class="plan-card reveal">
+      <div class="plan-header">
+        <div class="plan-name">Básico</div>
+        <div class="plan-barbers">✂✂ 2 Barbeiros</div>
+        <div class="plan-price">
+          <span class="currency">R$</span>49<span style="font-size:32px">,99</span>
+        </div>
+        <div class="plan-period">por mês</div>
+      </div>
+      <div class="plan-features">
+        <div class="plan-feat"><span class="check">✓</span> Tudo do plano Solo</div>
+        <div class="plan-feat"><span class="check">✓</span> 2 agendas independentes</div>
+        <div class="plan-feat"><span class="check">✓</span> Gestão de equipe</div>
+        <div class="plan-feat"><span class="check">✓</span> Relatório de agendamentos</div>
+        <div class="plan-feat"><span class="check">✓</span> Serviços personalizados</div>
+        <div class="plan-feat"><span class="check">✓</span> Controle por barbeiro</div>
+        <div class="plan-feat"><span class="check">✓</span> Suporte prioritário</div>
+      </div>
+      <div class="plan-cta">
+        <a href="#contato" class="plan-btn plan-btn-outline">Contratar →</a>
+      </div>
+    </div>
+
+    <!-- INTERMEDIÁRIO - POPULAR -->
+    <div class="plan-card popular reveal">
+      <div class="popular-ribbon">⭐ MAIS POPULAR</div>
+      <div class="plan-header">
+        <div class="plan-name">Intermediário</div>
+        <div class="plan-barbers">✂✂✂ 3 Barbeiros</div>
+        <div class="plan-price">
+          <span class="currency">R$</span>59<span style="font-size:32px">,99</span>
+        </div>
+        <div class="plan-period">por mês</div>
+      </div>
+      <div class="plan-features">
+        <div class="plan-feat"><span class="check">✓</span> Tudo do plano Básico</div>
+        <div class="plan-feat"><span class="check">✓</span> 3 agendas independentes</div>
+        <div class="plan-feat"><span class="check">✓</span> Dashboard avançado</div>
+        <div class="plan-feat"><span class="check">✓</span> Histórico de clientes</div>
+        <div class="plan-feat"><span class="check">✓</span> Personalização da página</div>
+        <div class="plan-feat"><span class="check">✓</span> Sem taxa por agendamento</div>
+        <div class="plan-feat"><span class="check">✓</span> Suporte VIP</div>
+      </div>
+      <div class="plan-cta">
+        <a href="#contato" class="plan-btn plan-btn-solid">✂ Contratar Agora</a>
+      </div>
+    </div>
+
+    <!-- MASTER -->
+    <div class="plan-card reveal" style="border-color:rgba(26,58,107,.25);">
+      <div class="plan-header" style="background:var(--azul-suave);border-bottom-color:var(--azul-borda);">
+        <div class="plan-name" style="color:var(--azul);">Master</div>
+        <div class="plan-barbers" style="color:var(--azul);">✂✂✂✂ 4 a 6 Barbeiros</div>
+        <div class="plan-price" style="color:var(--azul);">
+          <span class="currency">R$</span>89<span style="font-size:32px">,99</span>
+        </div>
+        <div class="plan-period">por mês</div>
+      </div>
+      <div class="plan-features">
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Tudo do Intermediário</div>
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Até 6 agendas</div>
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Gestão completa de equipe</div>
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Relatórios detalhados</div>
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Múltiplos serviços/preços</div>
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Configuração exclusiva</div>
+        <div class="plan-feat"><span class="check" style="background:rgba(26,58,107,.1);border-color:rgba(26,58,107,.25);color:var(--azul)">✓</span> Suporte dedicado</div>
+      </div>
+      <div class="plan-cta">
+        <a href="#contato" class="plan-btn" style="background:var(--azul);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all .3s;" onmouseover="this.style.background='var(--azul-mid)'" onmouseout="this.style.background='var(--azul)'">👑 Contratar Master</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="plans-guarantee reveal">
+    <div class="guarantee-item"><span class="ico">✓</span> Sem taxa de instalação</div>
+    <div class="guarantee-item"><span class="ico">✓</span> Sem contrato de fidelidade</div>
+    <div class="guarantee-item"><span class="ico">✓</span> Suporte incluso</div>
+    <div class="guarantee-item"><span class="ico">✓</span> Cancele quando quiser</div>
+  </div>
+</div>
+
+<!-- ══ CTA FINAL ══════════════════════════════════════════════════════════════ -->
+<div id="contato" class="cta-final">
+  <div class="cta-final-inner">
+    <span class="section-label">✂ Próximo passo</span>
+    <h2 class="section-title reveal">TRANSFORME<br>SUA <span style="color:var(--vermelho-vivo)">BARBEARIA</span><br>AGORA</h2>
+    <p class="section-sub reveal">Entre em contato e tenha seu sistema configurado e funcionando ainda esta semana.</p>
+
+    <div class="steps reveal">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-ico">📱</div>
+        <div class="step-label">Entre em contato<br>pelo WhatsApp</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-ico">📋</div>
+        <div class="step-label">Escolha seu<br>plano ideal</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-ico">⚙️</div>
+        <div class="step-label">Sistema configurado<br>em até 24h</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-ico">🎉</div>
+        <div class="step-label">Comece a receber<br>agendamentos</div>
+      </div>
+    </div>
+
+    <!-- O href do WhatsApp é gerado pelo script abaixo -->
+    <a id="wpp-btn" href="#" class="wpp-card reveal" target="_blank" rel="noopener">
+      <div class="wpp-icon">
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 2C8.268 2 2 8.268 2 16c0 2.478.676 4.8 1.853 6.793L2 30l7.414-1.82A13.94 13.94 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2z" fill="#fff" fill-opacity=".9"/>
+          <path d="M22.5 19.5c-.3-.15-1.8-.9-2.1-1-.3-.1-.5-.15-.7.15-.2.3-.8 1-.95 1.2-.15.2-.3.225-.6.075-.3-.15-1.275-.47-2.425-1.5-.9-.8-1.5-1.79-1.675-2.09-.175-.3-.018-.463.13-.61.135-.135.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.7-1.7-.962-2.325-.25-.6-.51-.52-.7-.53-.175-.008-.375-.01-.575-.01-.2 0-.525.075-.8.375s-1.05 1.025-1.05 2.5 1.075 2.9 1.225 3.1c.15.2 2.1 3.2 5.1 4.488.713.307 1.269.49 1.703.628.715.227 1.366.195 1.88.118.574-.085 1.8-.735 2.05-1.445.25-.71.25-1.32.175-1.447-.075-.127-.275-.2-.575-.35z" fill="#25D366"/>
+        </svg>
+      </div>
+      Fale pelo WhatsApp Agora
+    </a>
+
+    <p style="margin-top:20px;font-size:13px;color:rgba(255,255,255,.4);">
+      Configuração rápida &nbsp;·&nbsp; Suporte em português &nbsp;·&nbsp; Sem fidelidade
+    </p>
+  </div>
+</div>
+
+<!-- ══ FOOTER ═════════════════════════════════════════════════════════════════ -->
+<footer>
+  <p>✂ Sistema de Gestão para Barbearias Modernas &nbsp;·&nbsp; Mais organização · Mais clientes · Mais faturamento</p>
+</footer>
+
+<script>
+  /* ════════════════════════════════════════════════════
+     ▌  CONFIGURAÇÃO DO WHATSAPP — edite aqui ▌
+     ════════════════════════════════════════════════════
+     Formato do número: código do país + DDD + número
+     Sem espaços, traços ou parênteses.
+     Exemplo: 5585999998888  (55 = Brasil, 85 = Fortaleza)
+  ════════════════════════════════════════════════════ */
+  const WHATSAPP_NUMERO  = "5585986717530";          // ← Altere aqui
+  const WHATSAPP_MENSAGEM = "Olá! Vim pelo portfólio e tenho interesse no sistema de gestão para barbearia. Pode me passar mais informações?"; // ← Altere aqui
+
+  // Gera o link automaticamente
+  const wppLink = `https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent(WHATSAPP_MENSAGEM)}`;
+  document.getElementById("wpp-btn").href = wppLink;
+
+  // Aplica também a todos os botões "Contratar" dos planos
+  document.querySelectorAll('a[href="#contato"]').forEach(a => {
+    a.addEventListener('click', e => {
+      // Scroll suave para a seção de contato
+      const target = document.querySelector('#contato');
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  /* ── Scroll reveal ─────────────────────────────────────────────────────── */
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  /* ── Counter animation ─────────────────────────────────────────────────── */
+  const countEls = document.querySelectorAll('[data-count]');
+  const counterObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const el = e.target;
+        const target = +el.dataset.count;
+        let current = 0;
+        const step = target / 40;
+        const timer = setInterval(() => {
+          current = Math.min(current + step, target);
+          el.textContent = Math.floor(current) + (el.dataset.suffix || '');
+          if (current >= target) clearInterval(timer);
+        }, 35);
+        counterObs.unobserve(el);
+      }
+    });
+  }, { threshold: .5 });
+  countEls.forEach(el => counterObs.observe(el));
+
+  /* ── Parallax hero ─────────────────────────────────────────────────────── */
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY;
+    const heroContent = document.querySelector('.hero-content');
+    if (heroContent && scrollY < window.innerHeight) {
+      heroContent.style.transform = `translateY(${scrollY * 0.3}px)`;
+      heroContent.style.opacity = 1 - scrollY / (window.innerHeight * 0.8);
+    }
+  });
+</script>
+</body>
+</html>
